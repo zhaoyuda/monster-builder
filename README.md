@@ -17,7 +17,7 @@
 全程在浏览器里完成,不碰命令行、不碰代码。
 
 1. 打开 [`design/`](design/) 文件夹,点开你要改的那个文件:
-   - [`00-overview.md`](design/00-overview.md) — 总览 / 系统地图
+   - [`index.md`](design/index.md) — 总览 / 系统地图
    - [`01-assembly.md`](design/01-assembly.md) — 系统A · 装配
    - [`02-combat.md`](design/02-combat.md) — 系统B · 战斗
    - [`03-pve.md`](design/03-pve.md) — 系统C · PVE

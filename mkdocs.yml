@@ -46,7 +46,7 @@ plugins:
   - search
 
 nav:
-  - 总览: 00-overview.md
+  - 总览: index.md
   - 系统A · 装配: 01-assembly.md
   - 系统B · 战斗: 02-combat.md
   - 系统C · PVE: 03-pve.md
