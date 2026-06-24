@@ -13,7 +13,7 @@ battle(monsterA, monsterB, options) → BattleReport
 
 ---
 
-## 战斗框架(定稿,引擎实现依据)
+## 战斗框架(定稿,引擎实现依据) {#framework}
 
 ### 1. 怪兽 = 部件集合(关键)
 

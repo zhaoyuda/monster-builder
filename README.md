@@ -22,6 +22,7 @@
    - [`02-combat.md`](design/02-combat.md) — 系统B · 战斗
    - [`03-pve.md`](design/03-pve.md) — 系统C · PVE
    - [`04-pvp.md`](design/04-pvp.md) — 系统D · PVP
+   - [`05-open-questions.md`](design/05-open-questions.md) — 待确认问题(Akun 在这里逐条回填决定)
 2. 点文件右上角的**铅笔图标 ✏️**(Edit this file)。
 3. 直接在网页里改文字。
 4. 拉到页面最下方,点绿色按钮 **「Commit changes」**(再点一次确认)。
