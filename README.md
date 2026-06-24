@@ -6,7 +6,7 @@
 
 ## 📖 在线 wiki
 
-👉 **<!-- 部署完成后把 Pages 链接填到这里 -->（部署后填入 Pages 链接）**
+👉 **https://zhaoyuda.github.io/monster-builder/**
 
 把这个链接存到手机,刷新就是最新版。
 
