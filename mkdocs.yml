@@ -1,0 +1,53 @@
+site_name: monster-builder · 设计文档
+site_description: 手搓一个大怪兽 —— 协作设计文档
+docs_dir: design
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.tracking
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/weather-night
+        name: 切换到夜间模式
+    - scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/weather-sunny
+        name: 切换到日间模式
+
+markdown_extensions:
+  - tables
+  - admonition
+  - attr_list
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+
+nav:
+  - 总览: 00-overview.md
+  - 系统A · 装配: 01-assembly.md
+  - 系统B · 战斗: 02-combat.md
+  - 系统C · PVE: 03-pve.md
+  - 系统D · PVP: 04-pvp.md

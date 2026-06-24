@@ -1,0 +1,14 @@
+# 私有项目笔记(设计动机、内部约定)——不公开
+CLAUDE.md
+
+# MkDocs 本地构建产物
+site/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
