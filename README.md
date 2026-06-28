@@ -12,33 +12,24 @@
 
 ---
 
-## ✏️ 给设计师 Akun:怎么改文档(不用装任何东西)
+## ✏️ 给设计师 Akun
 
-全程在浏览器里完成,不碰命令行、不碰代码。
+完整的傻瓜上手指南(注册、加协作者、改字、改表格的偷懒法、Markdown 小抄)在这里:
 
-1. 打开 [`design/`](design/) 文件夹,点开你要改的那个文件:
-   - [`index.md`](design/index.md) — 总览 / 系统地图
-   - [`01-assembly.md`](design/01-assembly.md) — 系统A · 装配
-   - [`02-combat.md`](design/02-combat.md) — 系统B · 战斗
-   - [`03-pve.md`](design/03-pve.md) — 系统C · PVE
-   - [`04-pvp.md`](design/04-pvp.md) — 系统D · PVP
-   - [`05-open-questions.md`](design/05-open-questions.md) — 待确认问题(Akun 在这里逐条回填决定)
-2. 点文件右上角的**铅笔图标 ✏️**(Edit this file)。
-3. 直接在网页里改文字。
-4. 拉到页面最下方,点绿色按钮 **「Commit changes」**(再点一次确认)。
-5. 等一两分钟,刷新上面的 wiki 链接,就能看到最新版了。
+👉 **[给 Akun 的改文档指南](design/给Akun的改文档指南.md)**(网站上也能看到这一页)
 
-> 改错了也不要紧——每次提交都有历史记录,随时能找回旧版本。
+一句话流程:打开 `design/` 里要改的文件 → 点右上角铅笔 ✏️ → 改 → 拉到底点绿色「Commit changes」→ 等 1-2 分钟刷新网站就是最新版。
 
-### Markdown 小抄
+设计文件分工:
 
-| 想要的效果 | 这样写 |
+| 文件 | 管什么 |
 |---|---|
-| 大标题 | `# 标题` |
-| 小标题 | `## 小标题` |
-| **加粗** | `**加粗**` |
-| 列表 | 每行开头写 `- ` |
-| 表格 | 见现有文件里的写法,照着改最省事 |
+| [`index.md`](design/index.md) | 总览 / 系统地图 / MVP |
+| [`01-assembly.md`](design/01-assembly.md) | 系统A · 装配(零件表) |
+| [`02-combat.md`](design/02-combat.md) | 系统B · 战斗(战斗手册) |
+| [`03-pve.md`](design/03-pve.md) | 系统C · PVE |
+| [`04-pvp.md`](design/04-pvp.md) | 系统D · PVP |
+| [`05-open-questions.md`](design/05-open-questions.md) | 待确认问题(Akun 在这里回填决定) |
 
 ---
 
