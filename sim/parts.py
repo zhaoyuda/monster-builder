@@ -46,12 +46,14 @@ CATALOG = {
     "粗腿":     dict(kind="leg",  atk=4,  hp=60,  energy=10, initiative=2, dodge=0.07, price=200),
     "踢腿":     dict(kind="leg",  atk=10, hp=50,  energy=10, initiative=0, dodge=0.0,  price=200),
     # 躯干(供能来源,血空即败)
-    "新手躯干":       dict(kind="torso", atk=0, hp=100, supply=30, price=400),
+    "新手躯干":       dict(kind="torso", atk=0, hp=100, supply=30, price=500),  # Q3 按公式修正
     "稍微长大的躯干": dict(kind="torso", atk=0, hp=200, supply=40, price=800),
     "有些肌肉的躯干": dict(kind="torso", atk=0, hp=150, supply=50, price=800),
     # 插件(E8:不可被攻击,不入目标池)
     "新手尾巴": dict(kind="tail", atk=0, hp=0, initiative=1, price=20),
     "猛尾":     dict(kind="tail", atk=0, hp=0, initiative=2, price=40),
+    "四肢插槽": dict(kind="slot", atk=0, hp=0, price=30),   # +1 手/腿/尾位(Q2)
+    "头部插槽": dict(kind="slot", atk=0, hp=0, price=50),   # +1 头位(Q2)
 }
 
 

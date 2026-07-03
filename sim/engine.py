@@ -33,6 +33,7 @@ class Monster:
     hands: list = field(default_factory=list)
     legs: list = field(default_factory=list)
     tails: list = field(default_factory=list)
+    slots: list = field(default_factory=list)   # 四肢插槽/头部插槽:只占预算、扩槽位,不参战
 
     def parts_of(self, kind: str) -> list:
         return {"head": self.heads, "hand": self.hands, "leg": self.legs}[kind]
@@ -54,7 +55,9 @@ class Monster:
             + sum(t.energy for t in self.tails)
 
     def price_total(self) -> int:
-        return sum(p.price for p in self.all_parts()) + sum(t.price for t in self.tails)
+        return (sum(p.price for p in self.all_parts())
+                + sum(t.price for t in self.tails)
+                + sum(s.price for s in self.slots))
 
 
 def _interleave(first_parts, second_parts):

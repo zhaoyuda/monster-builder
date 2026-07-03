@@ -167,6 +167,23 @@ class TestBattleRules(unittest.TestCase):
                           if e["type"] in ("hit", "dodge", "block") and e.get("side") == "B"]
         self.assertEqual(len(hand_attacks_b), 3, "B 的 3 只手都应出手")
 
+    def test_Q4_一方先攻为0则另一方固定先手(self):
+        a = mk("A", heads=["猛头"])                      # 先攻 0
+        b = mk("B", hands=["猛爪"], legs=["新手腿"])     # 先攻 1
+        for seed in range(20):
+            rep = battle(a, b, seed=seed, cfg=RuleConfig(round_limit=1))
+            rs = next(e for e in rep["events"] if e["type"] == "round_start")
+            self.assertEqual(rs["first"], "B", "先攻>0 的一方必须固定先手")
+
+    def test_Q2_槽位校验(self):
+        from .builds import build
+        # 3 头无插槽 → 超限
+        with self.assertRaises(AssertionError):
+            build("非法", "有些肌肉的躯干", heads=["新手头", "新手头", "新手头"])
+        # 补 2 个头部插槽 → 合法
+        build("合法", "有些肌肉的躯干", heads=["新手头", "新手头", "新手头"],
+              slots=["头部插槽", "头部插槽"])
+
     def test_眩晕方仍可被打且闪避格挡有效(self):
         # stun_scope=all 下,眩晕只停攻击;防御判定照常 —— 通过跑长局不出现异常来覆盖
         from .builds import roster
