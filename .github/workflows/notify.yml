@@ -1,0 +1,27 @@
+# 协作者(非 zhaoyuda)push 到 main 时,给 Yuda 手机推 ntfy 通知
+# topic 存在仓库 secret NTFY_TOPIC 里,不出现在公开代码中
+name: notify-on-collaborator-push
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # 手动触发用于测试(无视作者条件)
+
+jobs:
+  notify:
+    if: github.actor != 'zhaoyuda' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Push ntfy notification
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          ACTOR: ${{ github.actor }}
+          MSG: ${{ github.event.head_commit.message || '(manual test)' }}
+          URL: ${{ github.event.head_commit.url || github.event.repository.html_url }}
+        run: |
+          curl -sf \
+            -H "Title: monster-builder: ${ACTOR} 更新了仓库" \
+            -H "Click: ${URL}" \
+            -H "Tags: monster" \
+            -d "${MSG}" \
+            "https://ntfy.sh/${NTFY_TOPIC}"
