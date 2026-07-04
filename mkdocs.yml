@@ -52,4 +52,7 @@ nav:
   - 系统C · PVE: 03-pve.md
   - 系统D · PVP: 04-pvp.md
   - 待确认问题: 05-open-questions.md
+  - 🧪 战斗模拟:
+      - 说明与报告列表: sim-reports/index.md
+      - 2026-07-03 冒烟测试: sim-reports/2026-07-03-冒烟测试.md
   - 📝 改文档指南: 给Akun的改文档指南.md
