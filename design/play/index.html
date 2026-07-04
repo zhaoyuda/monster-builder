@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>手搓大怪兽 · 对战 Demo</title>
+<style>
+  :root {
+    --bg: #14121f; --panel: #1e1b2e; --panel2: #262238; --line: #3a3355;
+    --text: #e8e4f5; --dim: #9b93b8; --acc: #a78bfa; --acc2: #7c5cff;
+    --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --hpA: #4ade80; --hpB: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif; font-size: 15px; line-height: 1.55; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 12px 12px 80px; }
+  header { display: flex; align-items: baseline; gap: 10px; padding: 10px 2px 14px; }
+  header h1 { font-size: 20px; }
+  header a { color: var(--dim); font-size: 13px; text-decoration: none; margin-left: auto; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tabs button { flex: 1; padding: 10px; font-size: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--dim); border-radius: 12px; cursor: pointer; }
+  .tabs button.on { background: var(--acc2); border-color: var(--acc2); color: #fff; font-weight: 700; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; color: var(--acc); margin-bottom: 10px; }
+  select, .btn { font-size: 15px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); }
+  .btn { cursor: pointer; }
+  .btn.primary { background: var(--acc2); border-color: var(--acc2); color: #fff; font-weight: 700; }
+  .btn.primary:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.ghost { background: transparent; }
+  /* 装配 */
+  .statbar { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--dim); }
+  .statbar b { color: var(--text); font-weight: 600; }
+  .statbar .bad b { color: var(--bad); }
+  .statbar .warn b { color: var(--warn); }
+  .errbox { margin-top: 8px; font-size: 13px; color: var(--bad); }
+  .warnbox { margin-top: 8px; font-size: 13px; color: var(--warn); }
+  .group { margin-top: 12px; }
+  .group .gtitle { font-size: 13px; color: var(--dim); margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; font-size: 14px; cursor: pointer; }
+  .chip .x { color: var(--bad); font-weight: 700; }
+  .chip.add { border-style: dashed; color: var(--dim); }
+  .chip .sub { color: var(--dim); font-size: 12px; }
+  .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: flex-end; z-index: 50; }
+  .sheet.on { display: flex; }
+  .sheet .inner { background: var(--panel); border-radius: 18px 18px 0 0; width: 100%; max-width: 720px; margin: 0 auto; max-height: 70vh; overflow-y: auto; padding: 16px; }
+  .sheet h3 { font-size: 15px; margin-bottom: 10px; color: var(--acc); }
+  .opt { display: flex; justify-content: space-between; gap: 8px; padding: 11px 8px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .opt:active { background: var(--panel2); }
+  .opt .nm { font-weight: 600; }
+  .opt .st { color: var(--dim); font-size: 13px; text-align: right; }
+  /* 战斗 */
+  .arena { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .side h3 { font-size: 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: baseline; }
+  .side h3 .price { font-size: 11px; color: var(--dim); font-weight: 400; }
+  .prow { margin-bottom: 7px; font-size: 12px; }
+  .prow .nm { display: flex; justify-content: space-between; color: var(--dim); }
+  .prow .nm b { color: var(--text); font-weight: 500; }
+  .prow.dead { opacity: .35; filter: grayscale(1); }
+  .prow.dead .nm b { text-decoration: line-through; }
+  .prow.torso .nm b { color: var(--acc); }
+  .bar { height: 7px; background: #000; border-radius: 4px; overflow: hidden; margin-top: 2px; }
+  .bar i { display: block; height: 100%; border-radius: 4px; transition: width .25s; }
+  .A .bar i { background: var(--hpA); } .B .bar i { background: var(--hpB); }
+  .logbox { background: #0d0b16; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; height: 300px; overflow-y: auto; font-size: 13px; margin-top: 12px; }
+  .logbox p { margin: 3px 0; color: var(--dim); }
+  .logbox p b { color: var(--text); font-weight: 600; }
+  .logbox .rhead { color: var(--acc); margin-top: 8px; font-weight: 700; }
+  .logbox .brk { color: var(--bad); font-weight: 700; }
+  .logbox .win { color: var(--ok); font-weight: 800; font-size: 15px; margin-top: 8px; }
+  .ctl { display: flex; gap: 8px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+  .speed { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .speed button { border: 0; background: var(--panel2); color: var(--dim); padding: 8px 12px; font-size: 13px; cursor: pointer; }
+  .speed button.on { background: var(--acc2); color: #fff; }
+  .seed { font-size: 12px; color: var(--dim); margin-left: auto; }
+  .banner { text-align: center; font-size: 17px; font-weight: 800; padding: 10px; border-radius: 12px; margin-top: 12px; display: none; }
+  .banner.win { display: block; background: rgba(74, 222, 128, .12); color: var(--ok); }
+  .banner.lose { display: block; background: rgba(248, 113, 113, .12); color: var(--bad); }
+  .banner.draw { display: block; background: rgba(251, 191, 36, .12); color: var(--warn); }
+  .hint { font-size: 12px; color: var(--dim); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🦖 手搓大怪兽</h1>
+    <span style="color:var(--dim);font-size:13px">对战 Demo v0</span>
+    <a href="../">← 设计 wiki</a>
+  </header>
+
+  <div class="tabs">
+    <button id="tabBuild" class="on">🔧 装配</button>
+    <button id="tabFight">⚔️ 战斗</button>
+  </div>
+
+  <!-- 装配页 -->
+  <div id="pgBuild">
+    <div class="card">
+      <h2>快速开始</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="preset"></select>
+        <button class="btn" id="loadPreset">载入预设</button>
+      </div>
+      <div class="hint">也可以从零开始:先选躯干,再点各栏的「+ 添加」。</div>
+    </div>
+
+    <div class="card">
+      <h2>我的怪兽</h2>
+      <div class="statbar" id="stats"></div>
+      <div class="errbox" id="errs"></div>
+      <div class="warnbox" id="warns"></div>
+      <div class="group">
+        <div class="gtitle">躯干(必选)</div>
+        <div class="chips" id="torsoRow"></div>
+      </div>
+      <div class="group"><div class="gtitle">头 <span id="headCap"></span></div><div class="chips" id="headRow"></div></div>
+      <div class="group"><div class="gtitle">手 <span id="limbCap"></span></div><div class="chips" id="handRow"></div></div>
+      <div class="group"><div class="gtitle">腿</div><div class="chips" id="legRow"></div></div>
+      <div class="group"><div class="gtitle">尾巴(插件:不可被攻击,占四肢位)</div><div class="chips" id="tailRow"></div></div>
+      <div class="group"><div class="gtitle">扩展插槽</div><div class="chips" id="slotRow"></div></div>
+    </div>
+
+    <button class="btn primary" id="goFight" style="width:100%;padding:14px;font-size:17px">⚔️ 去战斗</button>
+  </div>
+
+  <!-- 战斗页 -->
+  <div id="pgFight" style="display:none">
+    <div class="card">
+      <h2>选择对手</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="enemySel"></select>
+        <button class="btn primary" id="startBtn">开打!</button>
+      </div>
+      <div class="hint" id="enemyDesc"></div>
+    </div>
+
+    <div class="card">
+      <div class="arena">
+        <div class="side A"><h3>😤 <span id="nameA">我的怪兽</span> <span class="price" id="priceA"></span></h3><div id="partsA"></div></div>
+        <div class="side B"><h3>👿 <span id="nameB">对手</span> <span class="price" id="priceB"></span></h3><div id="partsB"></div></div>
+      </div>
+      <div class="banner" id="banner"></div>
+      <div class="logbox" id="logbox"><p style="color:var(--dim)">点「开打!」开始 —— 战报会在这里滚动。</p></div>
+      <div class="ctl">
+        <div class="speed" id="speedCtl">
+          <button data-s="600">1×</button><button data-s="280" class="on">2×</button>
+          <button data-s="110">4×</button><button data-s="0">瞬间</button>
+        </div>
+        <button class="btn ghost" id="rematch">🎲 再战一局</button>
+        <span class="seed" id="seedLbl"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 选件底部弹层 -->
+<div class="sheet" id="sheet"><div class="inner"><h3 id="sheetTitle"></h3><div id="sheetOpts"></div></div></div>
+
+<script src="engine.js"></script>
+<script>
+"use strict";
+const E = MonsterEngine;
+const $ = (id) => document.getElementById(id);
+
+// ===== 玩家配装状态 =====
+let build = { torso: "新手躯干", heads: ["新手头"], hands: ["猛爪"], legs: ["新手腿", "新手腿"], tails: [], slots: [] };
+
+const CAT_BY_KIND = {};
+for (const [n, s] of Object.entries(E.CATALOG)) (CAT_BY_KIND[s.kind] = CAT_BY_KIND[s.kind] || []).push(n);
+
+function statStr(n) {
+  const s = E.CATALOG[n];
+  const bits = [];
+  if (s.atk) bits.push(`攻${s.atk}`);
+  if (s.hp) bits.push(`血${s.hp}`);
+  if (s.supply) bits.push(`供能${s.supply}`);
+  if (s.energy) bits.push(`耗能${s.energy}`);
+  if (s.command) bits.push(`指挥${s.command}`);
+  if (s.initiative) bits.push(`先攻${s.initiative}`);
+  if (s.dodge) bits.push(`闪避${Math.round(s.dodge * 100)}%`);
+  bits.push(`💰${s.price}`);
+  return bits.join(" · ");
+}
+
+function monster() { return E.makeMonster("我的怪兽", build); }
+
+function renderBuild() {
+  const m = monster();
+  const errs = E.validate(m);
+  const cmd = E.commandSupply(m), limbs = m.hands.length + m.legs.length;
+  const headSlots = 1 + build.slots.filter((s) => s === "头部插槽").length;
+  const limbSlots = 4 + build.slots.filter((s) => s === "四肢插槽").length;
+  const nLimbSlotUsed = build.hands.length + build.legs.length + build.tails.length;
+  const eu = E.energyUsed(m), sup = m.torso.supply;
+
+  $("stats").innerHTML = [
+    `<span>💰 总价 <b>${E.priceTotal(m)}</b></span>`,
+    `<span class="${eu > sup ? "bad" : ""}">⚡ 能量 <b>${eu}/${sup}</b></span>`,
+    `<span class="${build.heads.length > headSlots ? "bad" : ""}">🧩 头槽 <b>${build.heads.length}/${headSlots}</b></span>`,
+    `<span class="${nLimbSlotUsed > limbSlots ? "bad" : ""}">🧩 四肢槽 <b>${nLimbSlotUsed}/${limbSlots}</b></span>`,
+    `<span class="${limbs > cmd ? "warn" : ""}">🧠 指挥点 <b>${cmd}</b>(手腿共 ${limbs})</span>`,
+    `<span>🎲 先攻 <b>${E.initiativeTotal(m)}</b> · 💨 闪避 <b>${Math.round(E.dodgeTotal(m, E.DEFAULT_CFG) * 100)}%</b></span>`,
+  ].join("");
+  $("errs").textContent = errs.length ? "⛔ " + errs.join(";") + "(不能出战)" : "";
+  $("warns").textContent = limbs > cmd
+    ? `⚠️ 指挥点不足:每回合只有 ${cmd} 只手/腿能出手,其余站着不动(头被打掉还会更少)。加头可以提高指挥点。` : "";
+  $("goFight").disabled = errs.length > 0;
+  $("headCap").textContent = `(${build.heads.length}/${headSlots})`;
+  $("limbCap").textContent = `(手+腿+尾 ${nLimbSlotUsed}/${limbSlots})`;
+
+  $("torsoRow").innerHTML = `<span class="chip" onclick="openSheet('torso')"><b>${build.torso}</b><span class="sub">${statStr(build.torso)}</span></span>`;
+  for (const [kind, key, rowId] of [["head","heads","headRow"],["hand","hands","handRow"],["leg","legs","legRow"],["tail","tails","tailRow"],["slot","slots","slotRow"]]) {
+    const row = build[key].map((n, i) =>
+      `<span class="chip" onclick="removePart('${key}',${i})">${n} <span class="sub">${E.CATALOG[n].atk ? "攻" + E.CATALOG[n].atk : ""}${E.CATALOG[n].hp ? " 血" + E.CATALOG[n].hp : ""}</span><span class="x">×</span></span>`).join("");
+    $(rowId).innerHTML = row + `<span class="chip add" onclick="openSheet('${kind}')">+ 添加</span>`;
+  }
+}
+
+window.removePart = (key, i) => { build[key].splice(i, 1); renderBuild(); };
+window.openSheet = (kind) => {
+  const names = CAT_BY_KIND[kind];
+  $("sheetTitle").textContent = kind === "torso" ? "更换躯干" : "添加部件(点击装上)";
+  $("sheetOpts").innerHTML = names.map((n) =>
+    `<div class="opt" onclick="pick('${kind}','${n}')"><span class="nm">${n}</span><span class="st">${statStr(n)}</span></div>`).join("");
+  $("sheet").classList.add("on");
+};
+window.pick = (kind, n) => {
+  if (kind === "torso") build.torso = n;
+  else build[{ head: "heads", hand: "hands", leg: "legs", tail: "tails", slot: "slots" }[kind]].push(n);
+  $("sheet").classList.remove("on");
+  renderBuild();
+};
+$("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").classList.remove("on"); });
+
+// 预设
+const presetSel = $("preset");
+for (const n of Object.keys(E.ARCHETYPES)) presetSel.add(new Option(n, n));
+$("loadPreset").onclick = () => {
+  const p = E.ARCHETYPES[presetSel.value];
+  build = { torso: p.torso, heads: [...(p.heads || [])], hands: [...(p.hands || [])],
+            legs: [...(p.legs || [])], tails: [...(p.tails || [])], slots: [...(p.slots || [])] };
+  renderBuild();
+};
+
+// ===== 页签 =====
+function showTab(fight) {
+  $("pgBuild").style.display = fight ? "none" : "";
+  $("pgFight").style.display = fight ? "" : "none";
+  $("tabBuild").classList.toggle("on", !fight);
+  $("tabFight").classList.toggle("on", fight);
+}
+$("tabBuild").onclick = () => showTab(false);
+$("tabFight").onclick = () => showTab(true);
+$("goFight").onclick = () => showTab(true);
+
+// ===== 战斗 =====
+const enemySel = $("enemySel");
+for (const n of Object.keys(E.ARCHETYPES)) enemySel.add(new Option(n, n));
+enemySel.value = "均衡流";
+enemySel.onchange = renderEnemyDesc;
+function renderEnemyDesc() {
+  const spec = Object.assign({ name: enemySel.value }, E.ARCHETYPES[enemySel.value]);
+  const m = E.makeMonster(spec.name, spec);
+  const ps = [...m.heads, ...m.hands, ...m.legs].map((p) => p.name);
+  $("enemyDesc").textContent = `${spec.torso} + ${ps.join("、") || "(无部件)"}${m.tails.length ? " + " + m.tails.map((t) => t.name).join("、") : ""} · 💰${E.priceTotal(m)}`;
+}
+renderEnemyDesc();
+
+let speedMs = 280, playTimer = null;
+$("speedCtl").querySelectorAll("button").forEach((b) => {
+  b.onclick = () => {
+    $("speedCtl").querySelectorAll("button").forEach((x) => x.classList.remove("on"));
+    b.classList.add("on");
+    speedMs = +b.dataset.s;
+  };
+});
+
+function partRow(p, id) {
+  return `<div class="prow ${p.kind === "torso" ? "torso" : ""}" id="${id}">
+    <div class="nm"><b>${p.kind === "torso" ? p.name : E.label(p)}</b><span>攻${p.atk}</span></div>
+    <div class="bar"><i style="width:100%"></i></div>
+    <div class="nm"><span class="hp">${p.hp}/${p.maxHp}</span></div></div>`;
+}
+
+const view = { A: {}, B: {} };
+function renderArena(a, b) {
+  for (const [key, m] of [["A", a], ["B", b]]) {
+    $("name" + key).textContent = m.name;
+    $("price" + key).textContent = "💰" + E.priceTotal(m);
+    view[key] = {};
+    let html = "";
+    for (const p of E.allParts(m)) {
+      const id = key + "_" + (p.kind === "torso" ? p.name : E.label(p));
+      view[key][p.kind === "torso" ? p.name : E.label(p)] = { id, maxHp: p.maxHp };
+      html += partRow(p, id);
+    }
+    $("parts" + key).innerHTML = html;
+  }
+}
+function setHp(sideKey, lbl, hp) {
+  const v = view[sideKey][lbl];
+  if (!v) return;
+  const el = document.getElementById(v.id);
+  el.querySelector(".bar i").style.width = Math.max(0, (hp / v.maxHp) * 100) + "%";
+  el.querySelector(".hp").textContent = `${Math.max(hp, 0)}/${v.maxHp}`;
+  if (hp <= 0) el.classList.add("dead");
+}
+
+function logLine(html, cls) {
+  const p = document.createElement("p");
+  if (cls) p.className = cls;
+  p.innerHTML = html;
+  $("logbox").appendChild(p);
+  $("logbox").scrollTop = $("logbox").scrollHeight;
+}
+
+const other = (k) => (k === "A" ? "B" : "A");
+function evLine(ev) {
+  const t = ev.type;
+  if (t === "round_start") return [`—— 回合 ${ev.round}(${ev.first === "A" ? "我方" : "敌方"}先手)——`, "rhead"];
+  if (t === "command") return [`🧠 指挥点 我方 ${ev.cmdA} · 敌方 ${ev.cmdB}`, ""];
+  if (t === "stunned") return [`💫 ${ev.side === "A" ? "我方" : "敌方"}眩晕,全队本回合不攻击!`, "brk"];
+  if (t === "no_command") return [`🚫 ${ev.side === "A" ? "我方" : "敌方"} <b>${ev.part}</b> 指挥点不足,站着不动`, ""];
+  if (t === "dodge") return [`💨 <b>${ev.attacker}</b> 的攻击被${ev.side === "A" ? "敌方" : "我方"}闪开了`, ""];
+  if (t === "block") return [`🛡 <b>${ev.attacker}</b> → ${ev.target}:被格挡!${ev.dmg}→${ev.taken} 伤转给 <b>${ev.blocker}</b>`, ""];
+  if (t === "hit") return [`${ev.side === "A" ? "🗡" : "🩸"} <b>${ev.attacker}</b> → <b>${ev.target}</b>:-${ev.dmg}`, ""];
+  if (t === "break") return [`💀 ${ev.side === "A" ? "我方" : "敌方"} <b>${ev.part}</b> 被击破!`, "brk"];
+  if (t === "stun_set") return [`⚡ ${ev.side === "A" ? "我方" : "敌方"}头部被毁 → 下回合全队瘫痪`, "brk"];
+  if (t === "timeout") return [`⏱ 打满回合上限,按躯干血量比判定`, "rhead"];
+  return null;
+}
+function applyEv(ev) {
+  if (ev.type === "hit") setHp(other(ev.side), ev.target, ev.targetHp);
+  else if (ev.type === "block") setHp(other(ev.side), ev.blocker, ev.blockerHp);
+}
+
+let curSeed = null;
+function startBattle(seed) {
+  clearTimeout(playTimer);
+  curSeed = seed == null ? Math.floor(Math.random() * 1e9) : seed;
+  const specA = Object.assign({ name: "我的怪兽" }, build);
+  const specB = Object.assign({ name: enemySel.value }, E.ARCHETYPES[enemySel.value]);
+  const a = E.makeMonster(specA.name, specA), b = E.makeMonster(specB.name, specB);
+  renderArena(a, b);
+  $("logbox").innerHTML = "";
+  $("banner").className = "banner";
+  $("seedLbl").textContent = "seed " + curSeed;
+  const rep = E.battle(specA, specB, curSeed);
+  const evs = rep.events;
+  let i = 0;
+  const step = () => {
+    if (i >= evs.length) return finish(rep);
+    if (speedMs === 0) {
+      for (; i < evs.length; i++) { const l = evLine(evs[i]); if (l) logLine(l[0], l[1]); applyEv(evs[i]); }
+      return finish(rep);
+    }
+    const ev = evs[i++];
+    const l = evLine(ev);
+    if (l) logLine(l[0], l[1]);
+    applyEv(ev);
+    playTimer = setTimeout(step, l ? speedMs : 0);
+  };
+  step();
+}
+function finish(rep) {
+  const bn = $("banner");
+  if (rep.winner === "A") { bn.textContent = "🎉 我的怪兽 获胜!"; bn.className = "banner win"; }
+  else if (rep.winner === "B") { bn.textContent = `💀 被 ${rep.winnerName} 击败(共 ${rep.rounds} 回合)`; bn.className = "banner lose"; }
+  else { bn.textContent = "🤝 平局"; bn.className = "banner draw"; }
+  logLine(rep.winner === "A" ? "🎉 胜利!" : rep.winner === "B" ? "💀 战败…" : "🤝 平局", "win");
+}
+$("startBtn").onclick = () => startBattle();
+$("rematch").onclick = () => startBattle();
+
+renderBuild();
+</script>
+</body>
+</html>
