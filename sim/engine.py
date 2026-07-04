@@ -23,6 +23,8 @@ class RuleConfig:
     round_limit: int = 100               # E2
     stun_scope: str = "all"              # all=全队下回合不攻击(Q8 推荐) / heads=仅头不攻击(备选 A/B)
     legs_attack: bool = True             # False=腿默认不攻击(Codex 语法调整 A/B 项)
+    command_mode: str = "off"            # off=不启用 / battle=Q12 提案:每回合指挥点池,手腿出手各耗 1 点,
+                                         #   池空则该肢体本回合不攻击(仍可被打/闪避/格挡)。头不耗点。
 
 
 @dataclass
@@ -49,6 +51,10 @@ class Monster:
         # 存活腿 + 插件尾巴提供先攻(尾巴不可被攻击,恒有效)
         return (sum(l.initiative for l in self.legs if l.alive())
                 + sum(t.initiative for t in self.tails))
+
+    def command_supply(self) -> int:
+        # 躯干基础指挥 + 存活头的指挥(头死指挥点即时消失 → 下回合肢体行动力下降)
+        return self.torso.command + sum(h.command for h in self.heads if h.alive())
 
     def energy_used(self) -> int:
         return sum(p.energy for p in self.all_parts() if p.kind != "torso") \
@@ -163,6 +169,11 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
                 log(round_no, "stunned", side=k)
             stun_next[k] = False
 
+        # 指挥点池(Q12 提案):回合开始按「躯干基础+存活头」结算,手腿出手各耗 1 点
+        cmd_pool = {k: sides[k].command_supply() for k in ("A", "B")}
+        if cfg.command_mode == "battle":
+            log(round_no, "command", cmd_a=cmd_pool["A"], cmd_b=cmd_pool["B"])
+
         phases = ["leg", "hand", "head"] if cfg.legs_attack else ["hand", "head"]
         for kind in phases:
             fp = [p for p in sides[first_key].parts_of(kind) if p.alive()]
@@ -171,6 +182,11 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
                 atk_key = first_key if who == "first" else second_key
                 if winner or skip[atk_key] or not part.alive() or part.atk <= 0:
                     continue
+                if cfg.command_mode == "battle" and kind in ("leg", "hand"):
+                    if cmd_pool[atk_key] <= 0:
+                        log(round_no, "no_command", side=atk_key, part=part.label)
+                        continue
+                    cmd_pool[atk_key] -= 1
                 resolve(round_no, atk_key, part)
             if winner:
                 break

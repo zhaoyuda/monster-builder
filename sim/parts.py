@@ -1,5 +1,6 @@
 # 零件目录 —— 数据与 design/01-assembly.md 一一对应,改零件表后同步这里
 # 字段:kind, atk 攻击力, hp 血量, energy 能量需求, supply 供能, initiative 先攻, dodge 闪避, price 价格
+#       command 指挥点供给(躯干/头;Q12 提案数值,待 Akun 拍板——仅 command_mode≠off 时生效)
 from dataclasses import dataclass
 
 
@@ -14,6 +15,7 @@ class Part:
     supply: int = 0    # 供能(仅躯干)
     initiative: int = 0
     dodge: float = 0.0
+    command: int = 0   # 指挥点供给(躯干基础值 / 头提供;手腿出手各耗 1 点)
     price: int = 0
     slot: int = 0      # 同类内槽位编号,从 1 开始
 
@@ -29,11 +31,11 @@ class Part:
 
 
 CATALOG = {
-    # 头(供能消耗型,倾向攻击)
-    "新手头":   dict(kind="head", atk=10, hp=50,  energy=10, price=200),
-    "猛头":     dict(kind="head", atk=20, hp=100, energy=20, price=400),
-    "顶撞头":   dict(kind="head", atk=25, hp=75,  energy=20, price=400),
-    "肿头":     dict(kind="head", atk=15, hp=125, energy=20, price=400),
+    # 头(供能消耗型,倾向攻击;command=指挥点供给,Q12 提案:聪明头指挥高、莽夫头指挥低)
+    "新手头":   dict(kind="head", atk=10, hp=50,  energy=10, command=2, price=200),
+    "猛头":     dict(kind="head", atk=20, hp=100, energy=20, command=2, price=400),
+    "顶撞头":   dict(kind="head", atk=25, hp=75,  energy=20, command=1, price=400),
+    "肿头":     dict(kind="head", atk=15, hp=125, energy=20, command=3, price=400),
     # 手(攻防平衡,可格挡)
     "新手手":   dict(kind="hand", atk=5,  hp=25,  energy=5,  price=100),
     "猛爪":     dict(kind="hand", atk=10, hp=50,  energy=10, price=200),
@@ -45,10 +47,11 @@ CATALOG = {
     "鞭腿":     dict(kind="leg",  atk=8,  hp=40,  energy=10, initiative=2, dodge=0.05, price=200),
     "粗腿":     dict(kind="leg",  atk=4,  hp=60,  energy=10, initiative=2, dodge=0.07, price=200),
     "踢腿":     dict(kind="leg",  atk=10, hp=50,  energy=10, initiative=0, dodge=0.0,  price=200),
-    # 躯干(供能来源,血空即败)
-    "新手躯干":       dict(kind="torso", atk=0, hp=100, supply=30, price=500),  # Q3 按公式修正
-    "稍微长大的躯干": dict(kind="torso", atk=0, hp=200, supply=40, price=800),
-    "有些肌肉的躯干": dict(kind="torso", atk=0, hp=150, supply=50, price=800),
+    # 躯干(供能来源,血空即败;command=基础指挥点——无头时的"脊髓反射"底线,大躯干略高回应 Q11)
+    # 数值经参数扫描定为 3/4/3:普通配装(1头+4肢)完全感觉不到指挥约束,只有无头/极端堆量被惩罚
+    "新手躯干":       dict(kind="torso", atk=0, hp=100, supply=30, command=3, price=500),  # Q3 按公式修正
+    "稍微长大的躯干": dict(kind="torso", atk=0, hp=200, supply=40, command=4, price=800),
+    "有些肌肉的躯干": dict(kind="torso", atk=0, hp=150, supply=50, command=3, price=800),
     # 插件(E8:不可被攻击,不入目标池)
     "新手尾巴": dict(kind="tail", atk=0, hp=0, initiative=1, price=20),
     "猛尾":     dict(kind="tail", atk=0, hp=0, initiative=2, price=40),

@@ -192,5 +192,57 @@ class TestBattleRules(unittest.TestCase):
         self.assertIn(rep["winner"], ("A", "B", "draw"))
 
 
+class TestCommandRules(unittest.TestCase):
+    """Q12 提案:指挥点池(command_mode="battle")。默认 off,不影响既有规则。"""
+
+    def test_指挥供给_躯干基础加存活头(self):
+        m = mk(heads=["新手头", "肿头"])          # 躯干3 + 2 + 3
+        self.assertEqual(m.command_supply(), 8)
+        m.heads[1].hp = 0
+        self.assertEqual(m.command_supply(), 5)   # 头死指挥点即时消失
+
+    def test_指挥不足_超出的肢体不攻击(self):
+        # 无头:躯干基础 3 点;4 手 → 只有前 3 只出手,第 4 只记 no_command
+        a = mk("A", hands=["猛爪", "猛爪", "猛爪", "猛爪"])
+        b = mk("B", torso="稍微长大的躯干")       # 沙包
+        cfg = RuleConfig(round_limit=1, command_mode="battle")
+        rep = battle(a, b, cfg=cfg, rng=ScriptRNG([0.0]))
+        atks = [e for e in rep["events"] if e["type"] in ("hit", "dodge", "block") and e["side"] == "A"]
+        idle = [e for e in rep["events"] if e["type"] == "no_command" and e["side"] == "A"]
+        self.assertEqual(len(atks), 3)
+        self.assertEqual(len(idle), 1)
+        self.assertIn("手4", idle[0]["part"])
+
+    def test_头不耗指挥点(self):
+        # 顶撞头(供1) + 躯干3 = 4 点 = 4 肢刚好;若头也耗点则必有 1 肢站桩
+        a = mk("A", heads=["顶撞头"], hands=["猛爪", "猛爪"], legs=["踢腿", "踢腿"])
+        b = mk("B", torso="稍微长大的躯干")
+        cfg = RuleConfig(round_limit=1, command_mode="battle")
+        rep = battle(a, b, cfg=cfg, rng=ScriptRNG([0.0, 0.9]))  # 先攻A;头目标roll→躯干
+        atks = [e for e in rep["events"] if e["type"] in ("hit", "dodge", "block") and e["side"] == "A"]
+        idle = [e for e in rep["events"] if e["type"] == "no_command" and e["side"] == "A"]
+        self.assertEqual(len(atks), 5, "4 肢 + 1 头 = 5 次攻击(头不占肢体点数)")
+        self.assertEqual(len(idle), 0)
+
+    def test_头被击破_下回合肢体行动力下降(self):
+        # A: 新手头(供2)+躯干3=5 → 4 肢全动;头被打死后掉到 3 → 只动 3 肢
+        a = mk("A", heads=["新手头"], hands=["猛爪", "猛爪"], legs=["踢腿", "踢腿"])
+        a.heads[0].hp = 1                          # 一击必碎
+        b = mk("B", heads=["顶撞头"], torso="稍微长大的躯干")
+        cfg = RuleConfig(round_limit=3, command_mode="battle")
+        rep = battle(a, b, seed=11, cfg=cfg)
+        cmd_events = {e["round"]: e for e in rep["events"] if e["type"] == "command"}
+        break_round = next((e["round"] for e in rep["events"]
+                            if e["type"] == "break" and e["side"] == "A" and e["kind"] == "head"), None)
+        if break_round and break_round + 1 in cmd_events:
+            self.assertEqual(cmd_events[break_round + 1]["cmd_a"], 3, "头死后指挥供给应降为躯干基础 3")
+
+    def test_默认off_不产生指挥事件(self):
+        a = mk("A", hands=["猛爪", "猛爪", "猛爪"])
+        b = mk("B")
+        rep = battle(a, b, seed=3, cfg=RuleConfig(round_limit=2))
+        self.assertFalse([e for e in rep["events"] if e["type"] in ("command", "no_command")])
+
+
 if __name__ == "__main__":
     unittest.main()

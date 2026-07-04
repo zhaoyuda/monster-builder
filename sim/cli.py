@@ -16,6 +16,11 @@ def render(report, verbose=False):
         if t == "round_start":
             if verbose:
                 lines.append(f"—— 回合 {r}(先攻 {ev['first']} | A:{ev['init_a']} vs B:{ev['init_b']})——")
+        elif t == "command":
+            if verbose:
+                lines.append(f"R{r} 🧠 指挥点:A {ev['cmd_a']} | B {ev['cmd_b']}")
+        elif t == "no_command":
+            lines.append(f"R{r} 🚫 [{ev['side']}] {ev['part']} 指挥点不足,本回合无法攻击")
         elif t == "stunned":
             lines.append(f"R{r} 💫 {ev['side']} 方眩晕,本回合全队不攻击")
         elif t == "dodge":
@@ -37,9 +42,10 @@ def render(report, verbose=False):
 def cmd_duel(args):
     r = roster()
     a, b = r[args.a], r[args.b]
-    rep = battle(a, b, seed=args.seed, cfg=RuleConfig(initiative_mode=args.initiative))
+    rep = battle(a, b, seed=args.seed,
+                 cfg=RuleConfig(initiative_mode=args.initiative, command_mode=args.command))
     if not args.verbose:
-        rep_events = [e for e in rep["events"] if e["type"] in ("break", "stun_set", "stunned", "timeout")]
+        rep_events = [e for e in rep["events"] if e["type"] in ("break", "stun_set", "stunned", "timeout", "no_command")]
         rep = {**rep, "events": rep_events}
     print(f"⚔️  A={a.name}(能量 {a.energy_used()}/{a.torso.supply},价 {a.price_total()})"
           f" vs B={b.name}(能量 {b.energy_used()}/{b.torso.supply},价 {b.price_total()})\n")
@@ -49,9 +55,9 @@ def cmd_duel(args):
 def cmd_tournament(args):
     r = roster()
     names = list(ARCHETYPES)
-    cfg = RuleConfig(initiative_mode=args.initiative)
+    cfg = RuleConfig(initiative_mode=args.initiative, command_mode=args.command)
     print(f"锦标赛:{len(names)} 流派 round-robin(含镜像),每对 {args.games} 局,"
-          f"先攻模式={args.initiative}\n")
+          f"先攻模式={args.initiative},指挥度={args.command}\n")
     # 胜率矩阵
     header = "| vs → | " + " | ".join(names) + " |"
     sep = "|---" * (len(names) + 1) + "|"
@@ -88,11 +94,13 @@ def main():
     d.add_argument("--seed", type=int, default=42)
     d.add_argument("-v", "--verbose", action="store_true", help="逐次攻击的完整战报")
     d.add_argument("--initiative", choices=["per_round", "once"], default="per_round")
+    d.add_argument("--command", choices=["off", "battle"], default="off", help="指挥度模式(Q12 提案)")
     d.set_defaults(fn=cmd_duel)
     t = sub.add_parser("tournament", help="流派 round-robin 胜率矩阵")
     t.add_argument("--games", type=int, default=500)
     t.add_argument("--seed", type=int, default=1)
     t.add_argument("--initiative", choices=["per_round", "once"], default="per_round")
+    t.add_argument("--command", choices=["off", "battle"], default="off", help="指挥度模式(Q12 提案)")
     t.set_defaults(fn=cmd_tournament)
     args = p.parse_args()
     args.fn(args)
