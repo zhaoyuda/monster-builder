@@ -11,10 +11,11 @@ permissions:
   pages: write
   id-token: write
 
-# 同一时间只跑一个发布,排队不取消
+# 连推多个 commit 时,新部署直接取消旧的(取消不算失败、不发失败邮件;
+# 每次部署的都是当次 commit 构建的完整站点,旧的没必要跑完)
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
