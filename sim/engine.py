@@ -23,8 +23,10 @@ class RuleConfig:
     round_limit: int = 100               # E2
     stun_scope: str = "all"              # all=全队下回合不攻击(Q8 推荐) / heads=仅头不攻击(备选 A/B)
     legs_attack: bool = True             # False=腿默认不攻击(Codex 语法调整 A/B 项)
-    command_mode: str = "off"            # off=不启用 / battle=Q12 提案:每回合指挥点池,手腿出手各耗 1 点,
-                                         #   池空则该肢体本回合不攻击(仍可被打/闪避/格挡)。头不耗点。
+    command_mode: str = "battle"         # Q12 方案A 已拍板(2026-07-07),默认启用:每回合指挥点池,
+                                         #   手腿出手各耗 1 点,池空则该肢体本回合不攻击(仍可被打/闪避/格挡)。
+                                         #   头不耗点。off=旧规则(对照 A/B 用)。
+    crit_mult: float = 2.0               # 暴击伤害倍率(Akun 定了各头暴击率,倍率待定;1.0=关闭暴击)
 
 
 @dataclass
@@ -124,6 +126,11 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
                 target=target.label, dodge=round(dv, 2))
             return
         dmg = attacker.atk
+        # 1.5) 暴击(仅 crit>0 的部件掷骰,不影响其他部件的随机流)
+        crit = False
+        if attacker.crit > 0 and cfg.crit_mult > 1.0 and rng.random() < attacker.crit:
+            crit = True
+            dmg = math.floor(dmg * cfg.crit_mult)
         # 2) 格挡:头/躯干被攻击 + 有存活手 → 20%,伤害×80% 转末位存活手(E5)
         blockers = [h for h in defender.hands if h.alive()]
         if target.kind in ("head", "torso") and blockers and rng.random() < cfg.block_prob:
@@ -132,14 +139,14 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
             blocker.hp -= bdmg
             log(round_no, "block", side=atk_key, attacker=attacker.label,
                 target=target.label, blocker=blocker.label, dmg=dmg, taken=bdmg,
-                blocker_hp=max(blocker.hp, 0))
+                blocker_hp=max(blocker.hp, 0), crit=crit)
             if not blocker.alive():
                 log(round_no, "break", side=def_key, part=blocker.label, kind="hand")
             return
         # 3) 正常结算(E6 即时死亡)
         target.hp -= dmg
         log(round_no, "hit", side=atk_key, attacker=attacker.label,
-            target=target.label, dmg=dmg, target_hp=max(target.hp, 0))
+            target=target.label, dmg=dmg, target_hp=max(target.hp, 0), crit=crit)
         if not target.alive():
             log(round_no, "break", side=def_key, part=target.label, kind=target.kind)
             if target.kind == "head":
@@ -187,7 +194,11 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
                         log(round_no, "no_command", side=atk_key, part=part.label)
                         continue
                     cmd_pool[atk_key] -= 1
-                resolve(round_no, atk_key, part)
+                # 多段攻击(如猛犸象头"双击"):每段独立结算目标/闪避/格挡,整体只耗 1 指挥点
+                for _ in range(part.hits):
+                    if winner or not part.alive():
+                        break
+                    resolve(round_no, atk_key, part)
             if winner:
                 break
         if winner:

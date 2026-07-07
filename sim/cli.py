@@ -28,7 +28,8 @@ def render(report, verbose=False):
         elif t == "block":
             lines.append(f"R{r} [{ev['side']}] {ev['attacker']} → {ev['target']}:被格挡!伤害 {ev['dmg']}→{ev['taken']} 转 {ev['blocker']}(余 {ev['blocker_hp']})")
         elif t == "hit":
-            lines.append(f"R{r} [{ev['side']}] {ev['attacker']} → {ev['target']}:伤害 {ev['dmg']}(余 {ev['target_hp']})")
+            c = "💥暴击!" if ev.get("crit") else ""
+            lines.append(f"R{r} [{ev['side']}] {ev['attacker']} → {ev['target']}:{c}伤害 {ev['dmg']}(余 {ev['target_hp']})")
         elif t == "break":
             lines.append(f"R{r} 💥 {ev['side']} 方 {ev['part']} 被击破!")
         elif t == "stun_set":
@@ -94,13 +95,13 @@ def main():
     d.add_argument("--seed", type=int, default=42)
     d.add_argument("-v", "--verbose", action="store_true", help="逐次攻击的完整战报")
     d.add_argument("--initiative", choices=["per_round", "once"], default="per_round")
-    d.add_argument("--command", choices=["off", "battle"], default="off", help="指挥度模式(Q12 提案)")
+    d.add_argument("--command", choices=["off", "battle"], default="battle", help="指挥度模式(方案A已拍板,默认开)")
     d.set_defaults(fn=cmd_duel)
     t = sub.add_parser("tournament", help="流派 round-robin 胜率矩阵")
     t.add_argument("--games", type=int, default=500)
     t.add_argument("--seed", type=int, default=1)
     t.add_argument("--initiative", choices=["per_round", "once"], default="per_round")
-    t.add_argument("--command", choices=["off", "battle"], default="off", help="指挥度模式(Q12 提案)")
+    t.add_argument("--command", choices=["off", "battle"], default="battle", help="指挥度模式(方案A已拍板,默认开)")
     t.set_defaults(fn=cmd_tournament)
     args = p.parse_args()
     args.fn(args)

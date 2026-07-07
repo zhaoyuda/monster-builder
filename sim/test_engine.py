@@ -84,17 +84,17 @@ class TestBattleRules(unittest.TestCase):
         self.assertIn("躯干", first_hit["target"])
 
     def test_格挡_20概率x80转末位存活手(self):
-        a = mk("A", heads=["猛头"])                      # 20 攻打躯干
+        a = mk("A", heads=["猛头"])                      # 20 攻打躯干(暴击率 8%,多耗一个 roll)
         b = mk("B", hands=["新手手", "猛爪"])            # 末位=手2 猛爪
-        # randoms: 先攻, 头目标0.9→躯干, 格挡0.1<0.2→触发
-        rep = self._run(a, b, [0.0, 0.9, 0.1])
+        # randoms: 先攻, 头目标0.9→躯干, 暴击0.5→无, 格挡0.1<0.2→触发
+        rep = self._run(a, b, [0.0, 0.9, 0.5, 0.1])
         blk = next(e for e in rep["events"] if e["type"] == "block")
         self.assertEqual(blk["taken"], 16)              # floor(20*0.8)
         self.assertIn("手2", blk["blocker"])            # 末位手
         # E5:末位手已死 → 转给存活的最大槽位
         b2 = mk("B", hands=["新手手", "猛爪"])
         b2.hands[1].hp = 0
-        rep = self._run(mk("A", heads=["猛头"]), b2, [0.0, 0.9, 0.1])
+        rep = self._run(mk("A", heads=["猛头"]), b2, [0.0, 0.9, 0.5, 0.1])
         blk = next(e for e in rep["events"] if e["type"] == "block")
         self.assertIn("手1", blk["blocker"])
 
@@ -237,11 +237,68 @@ class TestCommandRules(unittest.TestCase):
         if break_round and break_round + 1 in cmd_events:
             self.assertEqual(cmd_events[break_round + 1]["cmd_a"], 3, "头死后指挥供给应降为躯干基础 3")
 
-    def test_默认off_不产生指挥事件(self):
+    def test_默认battle_产生指挥事件_off则无(self):
+        # Q12 方案A 拍板后(2026-07-07)默认 command_mode="battle"
         a = mk("A", hands=["猛爪", "猛爪", "猛爪"])
         b = mk("B")
         rep = battle(a, b, seed=3, cfg=RuleConfig(round_limit=2))
-        self.assertFalse([e for e in rep["events"] if e["type"] in ("command", "no_command")])
+        self.assertTrue([e for e in rep["events"] if e["type"] == "command"])
+        rep_off = battle(a, b, seed=3, cfg=RuleConfig(round_limit=2, command_mode="off"))
+        self.assertFalse([e for e in rep_off["events"] if e["type"] in ("command", "no_command")])
+
+
+class TestCritAndMultiHit(unittest.TestCase):
+    """Q10 暴击(头的本体暴击率,倍率默认 2x)+ Q13 猛犸象头双击。"""
+
+    def test_暴击_双倍伤害且记入事件(self):
+        a = mk("A", heads=["顶撞头"])                    # 25 攻,暴击率 10%
+        b = mk("B", torso="稍微长大的躯干")
+        # randoms: 先攻0.0→A先, 头目标0.9→躯干, 暴击roll 0.05<0.10→暴击, 格挡0.99 无
+        cfg = RuleConfig(round_limit=1)
+        rep = battle(a, b, cfg=cfg, rng=ScriptRNG([0.0, 0.9, 0.05, 0.99]))
+        hit = next(e for e in rep["events"] if e["type"] == "hit")
+        self.assertTrue(hit["crit"])
+        self.assertEqual(hit["dmg"], 50)                 # 25×2
+        # 暴击 roll 0.15>0.10 → 不暴击
+        rep = battle(a, b, cfg=cfg, rng=ScriptRNG([0.0, 0.9, 0.15, 0.99]))
+        hit = next(e for e in rep["events"] if e["type"] == "hit")
+        self.assertFalse(hit["crit"])
+        self.assertEqual(hit["dmg"], 25)
+
+    def test_暴击率0的部件不消耗随机数(self):
+        # 新手头 crit=0:随机流应与加暴击前完全一致(只有 crit>0 才掷骰)
+        a = mk("A", heads=["新手头"])
+        b = mk("B", torso="稍微长大的躯干")
+        cfg = RuleConfig(round_limit=1)
+        rep = battle(a, b, cfg=cfg, rng=ScriptRNG([0.0, 0.9, 0.99]))  # 先攻,目标,格挡
+        hit = next(e for e in rep["events"] if e["type"] == "hit")
+        self.assertEqual(hit["dmg"], 10)
+        self.assertFalse(hit["crit"])
+
+    def test_crit_mult_1即关闭暴击(self):
+        a = mk("A", heads=["顶撞头"])
+        b = mk("B", torso="稍微长大的躯干")
+        cfg = RuleConfig(round_limit=1, crit_mult=1.0)
+        rep = battle(a, b, cfg=cfg, rng=ScriptRNG([0.0, 0.9, 0.99]))
+        hit = next(e for e in rep["events"] if e["type"] == "hit")
+        self.assertEqual(hit["dmg"], 25)
+
+    def test_双击_猛犸象头一回合两次独立攻击(self):
+        a = mk("A", torso="猛犸象躯干", heads=["猛犸象头"])
+        b = mk("B", torso="稍微长大的躯干")
+        cfg = RuleConfig(round_limit=1)
+        rep = battle(a, b, cfg=cfg, rng=ScriptRNG([0.0, 0.9, 0.99, 0.9, 0.99]))
+        hits = [e for e in rep["events"] if e["type"] == "hit" and e["side"] == "A"]
+        self.assertEqual(len(hits), 2, "双击应产生两次攻击结算")
+        self.assertTrue(all(h["dmg"] == 2 for h in hits))
+
+    def test_PVE配置_老迈的鹿不还手(self):
+        deer = mk("鹿", torso="鹿躯干")
+        player = mk("玩家", heads=["新手头"], hands=["装饰手"], legs=["装饰腿"])
+        rep = battle(player, deer, seed=1)
+        self.assertEqual(rep["winner"], "A")
+        deer_atks = [e for e in rep["events"] if e["type"] in ("hit", "dodge", "block") and e["side"] == "B"]
+        self.assertEqual(deer_atks, [], "鹿没有攻击部件,不应有任何攻击事件")
 
 
 if __name__ == "__main__":

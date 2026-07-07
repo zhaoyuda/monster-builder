@@ -77,23 +77,46 @@
   .banner.lose { display: block; background: rgba(248, 113, 113, .12); color: var(--bad); }
   .banner.draw { display: block; background: rgba(251, 191, 36, .12); color: var(--warn); }
   .hint { font-size: 12px; color: var(--dim); margin-top: 8px; }
+  /* 战役 */
+  .lv { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; background: var(--panel2); }
+  .lv .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .lv .top b { font-size: 16px; }
+  .lv .st { font-size: 12px; color: var(--dim); }
+  .lv .story { white-space: pre-line; color: var(--dim); font-size: 13px; margin: 8px 0; border-left: 3px solid var(--acc2); padding-left: 10px; }
+  .lv .enemy { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+  .lv.locked { opacity: .45; }
+  .lv.cleared { border-color: var(--ok); }
+  .lv .blockmsg { font-size: 12px; color: var(--bad); margin-top: 6px; }
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; background: var(--acc2); color: #fff; padding: 12px 18px; border-radius: 12px; font-weight: 700; z-index: 99; box-shadow: 0 8px 30px rgba(0,0,0,.5); display: none; max-width: 90vw; }
+  .lock { opacity: .45; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>🦖 手搓大怪兽</h1>
-    <span style="color:var(--dim);font-size:13px">对战 Demo v0</span>
+    <span style="color:var(--dim);font-size:13px">Demo v0.2 · PVE 战役</span>
     <a href="../">← 设计 wiki</a>
   </header>
 
   <div class="tabs">
-    <button id="tabBuild" class="on">🔧 装配</button>
-    <button id="tabFight">⚔️ 战斗</button>
+    <button id="tabCamp" class="on">🗺️ 战役</button>
+    <button id="tabBuild">🔧 装配</button>
+    <button id="tabFight">⚔️ 对战</button>
+  </div>
+
+  <!-- 战役页(PVE) -->
+  <div id="pgCamp">
+    <div class="card">
+      <h2>🧬 生物质:<span id="bioLbl"></span>(配装预算)</h2>
+      <div class="hint">打赢关卡获得生物质、解锁新零件;去「装配」页升级你的怪兽再挑战下一关。</div>
+      <div id="lvCards"></div>
+      <div style="margin-top:10px"><button class="btn ghost" id="resetCamp" style="font-size:12px">🗑 重置战役进度</button></div>
+    </div>
   </div>
 
   <!-- 装配页 -->
-  <div id="pgBuild">
+  <div id="pgBuild" style="display:none">
     <div class="card">
       <h2>快速开始</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -154,6 +177,7 @@
 
 <!-- 选件底部弹层 -->
 <div class="sheet" id="sheet"><div class="inner"><h3 id="sheetTitle"></h3><div id="sheetOpts"></div></div></div>
+<div class="toast" id="toastBox"></div>
 
 <script src="engine.js"></script>
 <script>
@@ -161,11 +185,50 @@
 const E = MonsterEngine;
 const $ = (id) => document.getElementById(id);
 
-// ===== 玩家配装状态 =====
-let build = { torso: "新手躯干", heads: ["新手头"], hands: ["猛爪"], legs: ["新手腿", "新手腿"], tails: [], slots: [] };
+// ===== 存档(localStorage)=====
+const SAVE_KEY = "monster-demo-v1";
+function loadSave() {
+  try { return Object.assign({ cleared: [], build: null }, JSON.parse(localStorage.getItem(SAVE_KEY) || "{}")); }
+  catch (e) { return { cleared: [], build: null }; }
+}
+let save = loadSave();
+function persist() { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
+
+const clearedSet = () => new Set(save.cleared);
+function budget() {
+  return E.STARTER_BUDGET + E.CAMPAIGN.filter((l) => clearedSet().has(l.lv)).reduce((s, l) => s + l.reward, 0);
+}
+function unlockedSet() {
+  const u = new Set(E.STARTER_UNLOCKED);
+  for (const l of E.CAMPAIGN) if (clearedSet().has(l.lv)) l.unlocks.forEach((n) => u.add(n));
+  return u;
+}
+
+// ===== 玩家配装状态(默认 = PVE 起始装)=====
+const starterBuild = () => ({ torso: E.STARTER_BUILD.torso, heads: [...E.STARTER_BUILD.heads],
+  hands: [...E.STARTER_BUILD.hands], legs: [...E.STARTER_BUILD.legs], tails: [], slots: [] });
+let build = save.build || starterBuild();
 
 const CAT_BY_KIND = {};
-for (const [n, s] of Object.entries(E.CATALOG)) (CAT_BY_KIND[s.kind] = CAT_BY_KIND[s.kind] || []).push(n);
+for (const [n, s] of Object.entries(E.CATALOG)) {
+  if (s.pve) continue;   // PVE 专属敌方部件不入玩家目录
+  (CAT_BY_KIND[s.kind] = CAT_BY_KIND[s.kind] || []).push(n);
+}
+
+function toast(msg) {
+  const t = $("toastBox");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(() => { t.style.display = "none"; }, 3500);
+}
+
+// 配装里未解锁的零件(载入预设可能带进来)
+function lockedInBuild() {
+  const u = unlockedSet();
+  const names = [build.torso, ...build.heads, ...build.hands, ...build.legs, ...build.tails, ...build.slots];
+  return [...new Set(names.filter((n) => !u.has(n)))];
+}
 
 function statStr(n) {
   const s = E.CATALOG[n];
@@ -192,8 +255,9 @@ function renderBuild() {
   const nLimbSlotUsed = build.hands.length + build.legs.length + build.tails.length;
   const eu = E.energyUsed(m), sup = m.torso.supply;
 
+  const price = E.priceTotal(m), bud = budget();
   $("stats").innerHTML = [
-    `<span>💰 总价 <b>${E.priceTotal(m)}</b></span>`,
+    `<span class="${price > bud ? "warn" : ""}">🧬 生物质 <b>${price}/${bud}</b></span>`,
     `<span class="${eu > sup ? "bad" : ""}">⚡ 能量 <b>${eu}/${sup}</b></span>`,
     `<span class="${build.heads.length > headSlots ? "bad" : ""}">🧩 头槽 <b>${build.heads.length}/${headSlots}</b></span>`,
     `<span class="${nLimbSlotUsed > limbSlots ? "bad" : ""}">🧩 四肢槽 <b>${nLimbSlotUsed}/${limbSlots}</b></span>`,
@@ -201,9 +265,14 @@ function renderBuild() {
     `<span>🎲 先攻 <b>${E.initiativeTotal(m)}</b> · 💨 闪避 <b>${Math.round(E.dodgeTotal(m, E.DEFAULT_CFG) * 100)}%</b></span>`,
   ].join("");
   $("errs").textContent = errs.length ? "⛔ " + errs.join(";") + "(不能出战)" : "";
-  $("warns").textContent = limbs > cmd
-    ? `⚠️ 指挥点不足:每回合只有 ${cmd} 只手/腿能出手,其余站着不动(头被打掉还会更少)。加头可以提高指挥点。` : "";
+  const wmsgs = [];
+  if (limbs > cmd) wmsgs.push(`⚠️ 指挥点不足:每回合只有 ${cmd} 只手/腿能出手,其余站着不动(头被打掉还会更少)。加头可以提高指挥点。`);
+  const lockedUsed = lockedInBuild();
+  if (lockedUsed.length) wmsgs.push(`🔒 含未解锁零件(${lockedUsed.join("、")}):只能自由对战,不能打战役。`);
+  else if (price > bud) wmsgs.push(`🧬 超出生物质预算(${price} > ${bud}):只能自由对战,不能打战役。打赢战役关卡可获得更多生物质。`);
+  $("warns").textContent = wmsgs.join(" ");
   $("goFight").disabled = errs.length > 0;
+  renderCampaign();
   $("headCap").textContent = `(${build.heads.length}/${headSlots})`;
   $("limbCap").textContent = `(手+腿+尾 ${nLimbSlotUsed}/${limbSlots})`;
 
@@ -215,18 +284,25 @@ function renderBuild() {
   }
 }
 
-window.removePart = (key, i) => { build[key].splice(i, 1); renderBuild(); };
+function saveBuild() { save.build = build; persist(); }
+window.removePart = (key, i) => { build[key].splice(i, 1); saveBuild(); renderBuild(); };
 window.openSheet = (kind) => {
   const names = CAT_BY_KIND[kind];
+  const u = unlockedSet();
   $("sheetTitle").textContent = kind === "torso" ? "更换躯干" : "添加部件(点击装上)";
-  $("sheetOpts").innerHTML = names.map((n) =>
-    `<div class="opt" onclick="pick('${kind}','${n}')"><span class="nm">${n}</span><span class="st">${statStr(n)}</span></div>`).join("");
+  $("sheetOpts").innerHTML = names.map((n) => {
+    const locked = !u.has(n);
+    return `<div class="opt ${locked ? "lock" : ""}" onclick="pick('${kind}','${n}',${locked})">
+      <span class="nm">${locked ? "🔒 " : ""}${n}</span><span class="st">${statStr(n)}${locked ? " · 战役解锁" : ""}</span></div>`;
+  }).join("");
   $("sheet").classList.add("on");
 };
-window.pick = (kind, n) => {
+window.pick = (kind, n, locked) => {
+  if (locked) { toast("🔒 这个零件还没解锁——打赢战役关卡可以解锁"); return; }
   if (kind === "torso") build.torso = n;
   else build[{ head: "heads", hand: "hands", leg: "legs", tail: "tails", slot: "slots" }[kind]].push(n);
   $("sheet").classList.remove("on");
+  saveBuild();
   renderBuild();
 };
 $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").classList.remove("on"); });
@@ -238,19 +314,76 @@ $("loadPreset").onclick = () => {
   const p = E.ARCHETYPES[presetSel.value];
   build = { torso: p.torso, heads: [...(p.heads || [])], hands: [...(p.hands || [])],
             legs: [...(p.legs || [])], tails: [...(p.tails || [])], slots: [...(p.slots || [])] };
+  saveBuild();
   renderBuild();
 };
 
 // ===== 页签 =====
-function showTab(fight) {
-  $("pgBuild").style.display = fight ? "none" : "";
-  $("pgFight").style.display = fight ? "" : "none";
-  $("tabBuild").classList.toggle("on", !fight);
-  $("tabFight").classList.toggle("on", fight);
+function showTab(which) {   // "camp" | "build" | "fight"
+  for (const [tab, pg] of [["tabCamp", "pgCamp"], ["tabBuild", "pgBuild"], ["tabFight", "pgFight"]]) {
+    const on = tab === "tab" + which[0].toUpperCase() + which.slice(1);
+    $(pg).style.display = on ? "" : "none";
+    $(tab).classList.toggle("on", on);
+  }
 }
-$("tabBuild").onclick = () => showTab(false);
-$("tabFight").onclick = () => showTab(true);
-$("goFight").onclick = () => showTab(true);
+$("tabCamp").onclick = () => showTab("camp");
+$("tabBuild").onclick = () => showTab("build");
+$("tabFight").onclick = () => showTab("fight");
+$("goFight").onclick = () => showTab("fight");
+
+// ===== 战役 =====
+function enemySummary(spec) {
+  const m = E.makeMonster("", spec);
+  return E.allParts(m).map((p) => {
+    const bits = [p.kind !== "torso" ? p.name : p.name];
+    const st = [];
+    if (p.atk) st.push(`攻${p.atk}${p.hits > 1 ? "×" + p.hits : ""}`);
+    st.push(`血${p.hp}`);
+    return `${p.name}(${st.join(" ")})`;
+  }).join(" + ");
+}
+function campBlockReason() {
+  const m = monster();
+  if (E.validate(m).length) return "⛔ 当前配装不合法(看「装配」页红字)";
+  const lk = lockedInBuild();
+  if (lk.length) return `🔒 配装含未解锁零件:${lk.join("、")}`;
+  if (E.priceTotal(m) > budget()) return `🧬 配装超出生物质预算(${E.priceTotal(m)} > ${budget()})`;
+  return null;
+}
+function renderCampaign() {
+  if (!$("lvCards")) return;
+  $("bioLbl").textContent = `${E.priceTotal(monster())} / ${budget()}`;
+  const cs = clearedSet();
+  const firstOpen = E.CAMPAIGN.find((l) => !cs.has(l.lv));
+  const block = campBlockReason();
+  $("lvCards").innerHTML = E.CAMPAIGN.map((l) => {
+    const cleared = cs.has(l.lv);
+    const open = cleared || (firstOpen && firstOpen.lv === l.lv);
+    const state = cleared ? "cleared" : open ? "" : "locked";
+    const stLbl = cleared ? "✅ 已通关(可重打)" : open ? "▶ 可挑战" : "🔒 先通关上一关";
+    return `<div class="lv ${state}">
+      <div class="top"><b>第 ${l.lv} 关 · ${l.name}</b><span class="st">${stLbl}</span></div>
+      ${open ? `<div class="story">${l.story}</div>` : ""}
+      <div class="enemy">👿 ${enemySummary(Object.assign({ name: l.name }, l.enemy))}</div>
+      <div class="st">🎁 首次通关:${l.reward} 生物质 + 解锁 ${l.unlocks.slice(0, 3).join("、")}${l.unlocks.length > 3 ? " 等" : ""}</div>
+      ${open ? `<div style="margin-top:8px"><button class="btn primary" onclick="campFight(${l.lv})" ${block ? "disabled" : ""}>⚔️ 开始战斗</button></div>` : ""}
+      ${open && block ? `<div class="blockmsg">${block}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+window.campFight = (lv) => {
+  const l = E.CAMPAIGN.find((x) => x.lv === lv);
+  showTab("fight");
+  startBattle(null, l);
+};
+$("resetCamp").onclick = () => {
+  if (!confirm("重置战役进度和配装?")) return;
+  save = { cleared: [], build: null };
+  persist();
+  build = starterBuild();
+  renderBuild();
+  toast("已重置——从一团生物质重新开始");
+};
 
 // ===== 战斗 =====
 const enemySel = $("enemySel");
@@ -321,8 +454,8 @@ function evLine(ev) {
   if (t === "stunned") return [`💫 ${ev.side === "A" ? "我方" : "敌方"}眩晕,全队本回合不攻击!`, "brk"];
   if (t === "no_command") return [`🚫 ${ev.side === "A" ? "我方" : "敌方"} <b>${ev.part}</b> 指挥点不足,站着不动`, ""];
   if (t === "dodge") return [`💨 <b>${ev.attacker}</b> 的攻击被${ev.side === "A" ? "敌方" : "我方"}闪开了`, ""];
-  if (t === "block") return [`🛡 <b>${ev.attacker}</b> → ${ev.target}:被格挡!${ev.dmg}→${ev.taken} 伤转给 <b>${ev.blocker}</b>`, ""];
-  if (t === "hit") return [`${ev.side === "A" ? "🗡" : "🩸"} <b>${ev.attacker}</b> → <b>${ev.target}</b>:-${ev.dmg}`, ""];
+  if (t === "block") return [`🛡 <b>${ev.attacker}</b> → ${ev.target}:${ev.crit ? "💥暴击!" : ""}被格挡!${ev.dmg}→${ev.taken} 伤转给 <b>${ev.blocker}</b>`, ""];
+  if (t === "hit") return [`${ev.side === "A" ? "🗡" : "🩸"} <b>${ev.attacker}</b> → <b>${ev.target}</b>:${ev.crit ? "💥暴击!" : ""}-${ev.dmg}`, ev.crit ? "brk" : ""];
   if (t === "break") return [`💀 ${ev.side === "A" ? "我方" : "敌方"} <b>${ev.part}</b> 被击破!`, "brk"];
   if (t === "stun_set") return [`⚡ ${ev.side === "A" ? "我方" : "敌方"}头部被毁 → 下回合全队瘫痪`, "brk"];
   if (t === "timeout") return [`⏱ 打满回合上限,按躯干血量比判定`, "rhead"];
@@ -333,12 +466,15 @@ function applyEv(ev) {
   else if (ev.type === "block") setHp(other(ev.side), ev.blocker, ev.blockerHp);
 }
 
-let curSeed = null;
-function startBattle(seed) {
+let curSeed = null, curCamp = null;
+function startBattle(seed, campLevel) {
   clearTimeout(playTimer);
   curSeed = seed == null ? Math.floor(Math.random() * 1e9) : seed;
+  curCamp = campLevel || null;
   const specA = Object.assign({ name: "我的怪兽" }, build);
-  const specB = Object.assign({ name: enemySel.value }, E.ARCHETYPES[enemySel.value]);
+  const specB = campLevel
+    ? Object.assign({ name: `第${campLevel.lv}关·${campLevel.name}` }, campLevel.enemy)
+    : Object.assign({ name: enemySel.value }, E.ARCHETYPES[enemySel.value]);
   const a = E.makeMonster(specA.name, specA), b = E.makeMonster(specB.name, specB);
   renderArena(a, b);
   $("logbox").innerHTML = "";
@@ -367,9 +503,23 @@ function finish(rep) {
   else if (rep.winner === "B") { bn.textContent = `💀 被 ${rep.winnerName} 击败(共 ${rep.rounds} 回合)`; bn.className = "banner lose"; }
   else { bn.textContent = "🤝 平局"; bn.className = "banner draw"; }
   logLine(rep.winner === "A" ? "🎉 胜利!" : rep.winner === "B" ? "💀 战败…" : "🤝 平局", "win");
+  // 战役结算
+  if (curCamp && rep.winner === "A") {
+    if (!clearedSet().has(curCamp.lv)) {
+      save.cleared.push(curCamp.lv);
+      persist();
+      toast(`🎁 首次通关!+${curCamp.reward} 生物质,解锁:${curCamp.unlocks.join("、")}`);
+      logLine(`🎁 获得 ${curCamp.reward} 生物质;解锁零件:${curCamp.unlocks.join("、")}——去「装配」页升级!`, "win");
+    } else {
+      logLine("(已通关过,本次无奖励)", "");
+    }
+    renderBuild();
+  } else if (curCamp && rep.winner !== "A") {
+    logLine("💡 打不过?去「装配」页换零件——注意能量和指挥点。", "");
+  }
 }
 $("startBtn").onclick = () => startBattle();
-$("rematch").onclick = () => startBattle();
+$("rematch").onclick = () => startBattle(null, curCamp);
 
 renderBuild();
 </script>

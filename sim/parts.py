@@ -16,6 +16,8 @@ class Part:
     initiative: int = 0
     dodge: float = 0.0
     command: int = 0   # 指挥点供给(躯干基础值 / 头提供;手腿出手各耗 1 点)
+    crit: float = 0.0  # 暴击率(仅对本部件自己的攻击生效;Akun 2026-07-07 拍板,倍率待定默认 2x)
+    hits: int = 1      # 每回合攻击次数(猛犸象头"双击"=2;每次独立结算目标/闪避/格挡,语义待 Akun 确认)
     price: int = 0
     slot: int = 0      # 同类内槽位编号,从 1 开始
 
@@ -31,11 +33,12 @@ class Part:
 
 
 CATALOG = {
-    # 头(供能消耗型,倾向攻击;command=指挥点供给,Q12 提案:聪明头指挥高、莽夫头指挥低)
-    "新手头":   dict(kind="head", atk=10, hp=50,  energy=10, command=2, price=200),
-    "猛头":     dict(kind="head", atk=20, hp=100, energy=20, command=2, price=400),
-    "顶撞头":   dict(kind="head", atk=25, hp=75,  energy=20, command=1, price=400),
-    "肿头":     dict(kind="head", atk=15, hp=125, energy=20, command=3, price=400),
+    # 头(供能消耗型,倾向攻击;command=指挥点供给——方案A已拍板,单头数值待调;
+    #    crit=暴击率(本体),Akun 2026-07-07 填入零件表)
+    "新手头":   dict(kind="head", atk=10, hp=50,  energy=10, command=2, crit=0.0,  price=200),
+    "猛头":     dict(kind="head", atk=20, hp=100, energy=20, command=2, crit=0.08, price=400),
+    "顶撞头":   dict(kind="head", atk=25, hp=75,  energy=20, command=1, crit=0.10, price=400),
+    "肿头":     dict(kind="head", atk=15, hp=125, energy=20, command=3, crit=0.08, price=400),
     # 手(攻防平衡,可格挡)
     "新手手":   dict(kind="hand", atk=5,  hp=25,  energy=5,  price=100),
     "猛爪":     dict(kind="hand", atk=10, hp=50,  energy=10, price=200),
@@ -57,6 +60,16 @@ CATALOG = {
     "猛尾":     dict(kind="tail", atk=0, hp=0, initiative=2, price=40),
     "四肢插槽": dict(kind="slot", atk=0, hp=0, price=30),   # +1 手/腿/尾位(Q2)
     "头部插槽": dict(kind="slot", atk=0, hp=0, price=50),   # +1 头位(Q2)
+    # 装饰件(PVE 起始装,Q13;数值为 Yuda 默认,待 Akun 核)
+    "装饰手":   dict(kind="hand", atk=0, hp=10, energy=0, price=0),
+    "装饰腿":   dict(kind="leg",  atk=0, hp=10, energy=0, initiative=0, dodge=0.0, price=0),
+    # PVE 专属敌方部件(03-pve 前三关,Akun 2026-07-07 设计;不入玩家目录,不受装配约束)
+    "鹿躯干":     dict(kind="torso", atk=0, hp=50,  supply=99, command=99, price=0),
+    "猛犸象头":   dict(kind="head",  atk=2, hp=75,  hits=2, price=0),   # 双击:2 攻 ×2 次
+    "猛犸象躯干": dict(kind="torso", atk=0, hp=200, supply=99, command=99, price=0),
+    "恐兽头":     dict(kind="head",  atk=5, hp=100, price=0),
+    "恐兽躯干":   dict(kind="torso", atk=0, hp=100, supply=99, command=99, price=0),
+    "恐兽爪":     dict(kind="hand",  atk=5, hp=25,  price=0),
 }
 
 

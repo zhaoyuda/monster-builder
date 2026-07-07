@@ -9,11 +9,11 @@
 
   // ===== 零件目录(与 sim/parts.py CATALOG 同步)=====
   const CATALOG = {
-    // 头:command=指挥点供给(Q12 方案A)
-    "新手头":   { kind: "head", atk: 10, hp: 50,  energy: 10, command: 2, price: 200 },
-    "猛头":     { kind: "head", atk: 20, hp: 100, energy: 20, command: 2, price: 400 },
-    "顶撞头":   { kind: "head", atk: 25, hp: 75,  energy: 20, command: 1, price: 400 },
-    "肿头":     { kind: "head", atk: 15, hp: 125, energy: 20, command: 3, price: 400 },
+    // 头:command=指挥点供给(Q12 方案A);crit=暴击率(本体,Akun 2026-07-07)
+    "新手头":   { kind: "head", atk: 10, hp: 50,  energy: 10, command: 2, crit: 0,    price: 200 },
+    "猛头":     { kind: "head", atk: 20, hp: 100, energy: 20, command: 2, crit: 0.08, price: 400 },
+    "顶撞头":   { kind: "head", atk: 25, hp: 75,  energy: 20, command: 1, crit: 0.10, price: 400 },
+    "肿头":     { kind: "head", atk: 15, hp: 125, energy: 20, command: 3, crit: 0.08, price: 400 },
     // 手
     "新手手":   { kind: "hand", atk: 5,  hp: 25,  energy: 5,  price: 100 },
     "猛爪":     { kind: "hand", atk: 10, hp: 50,  energy: 10, price: 200 },
@@ -34,6 +34,16 @@
     "猛尾":     { kind: "tail", atk: 0, hp: 0, initiative: 2, price: 40 },
     "四肢插槽": { kind: "slot", atk: 0, hp: 0, price: 30 },
     "头部插槽": { kind: "slot", atk: 0, hp: 0, price: 50 },
+    // 装饰件(PVE 起始装,Q13;数值待 Akun 核)
+    "装饰手":   { kind: "hand", atk: 0, hp: 10, energy: 0, price: 0 },
+    "装饰腿":   { kind: "leg",  atk: 0, hp: 10, energy: 0, price: 0 },
+    // PVE 专属敌方部件(不入玩家目录)
+    "鹿躯干":     { kind: "torso", atk: 0, hp: 50,  supply: 99, command: 99, price: 0, pve: true },
+    "猛犸象头":   { kind: "head",  atk: 2, hp: 75,  hits: 2, price: 0, pve: true },
+    "猛犸象躯干": { kind: "torso", atk: 0, hp: 200, supply: 99, command: 99, price: 0, pve: true },
+    "恐兽头":     { kind: "head",  atk: 5, hp: 100, price: 0, pve: true },
+    "恐兽躯干":   { kind: "torso", atk: 0, hp: 100, supply: 99, command: 99, price: 0, pve: true },
+    "恐兽爪":     { kind: "hand",  atk: 5, hp: 25,  price: 0, pve: true },
   };
   const KIND_CN = { head: "头", hand: "手", leg: "腿", torso: "躯干", tail: "尾" };
 
@@ -43,7 +53,7 @@
       name, slot: slot || 0, kind: s.kind, atk: s.atk || 0,
       hp: s.hp, maxHp: s.hp, energy: s.energy || 0, supply: s.supply || 0,
       initiative: s.initiative || 0, dodge: s.dodge || 0,
-      command: s.command || 0, price: s.price || 0,
+      command: s.command || 0, crit: s.crit || 0, hits: s.hits || 1, price: s.price || 0,
     };
   }
   const alive = (p) => p.hp > 0;
@@ -100,7 +110,8 @@
     initiativeMode: "per_round", headVsHeadProb: 0.5,
     blockProb: 0.2, blockMult: 0.8, dodgeLegSlots: 2,
     roundLimit: 100, stunScope: "all", legsAttack: true,
-    commandMode: "battle",   // demo 按 Q12 方案A 默认开启
+    commandMode: "battle",   // Q12 方案A 已拍板(2026-07-07)
+    critMult: 2.0,           // 暴击倍率(待 Akun 确认,暂 2 倍;1.0=关闭)
   };
 
   // ===== battle:纯函数,同 (a, b, seed, cfg) 必得同一战报 =====
@@ -140,20 +151,26 @@
         log(round, "dodge", { side: atkKey, attacker: label(attacker), target: label(target), dodge: dv });
         return;
       }
-      const dmg = attacker.atk;
+      let dmg = attacker.atk;
+      // 暴击(仅 crit>0 的部件掷骰)
+      let crit = false;
+      if (attacker.crit > 0 && cfg.critMult > 1 && rand() < attacker.crit) {
+        crit = true;
+        dmg = Math.floor(dmg * cfg.critMult);
+      }
       const blockers = defender.hands.filter(alive);
       if ((target.kind === "head" || target.kind === "torso") && blockers.length && rand() < cfg.blockProb) {
         const blocker = blockers.reduce((m, h) => (h.slot > m.slot ? h : m));
         const bdmg = dmg > 0 ? Math.max(1, Math.floor(dmg * cfg.blockMult)) : 0;
         blocker.hp -= bdmg;
         log(round, "block", { side: atkKey, attacker: label(attacker), target: label(target),
-          blocker: label(blocker), dmg, taken: bdmg, blockerHp: Math.max(blocker.hp, 0) });
+          blocker: label(blocker), dmg, taken: bdmg, blockerHp: Math.max(blocker.hp, 0), crit });
         if (!alive(blocker)) log(round, "break", { side: defKey, part: label(blocker), kind: "hand" });
         return;
       }
       target.hp -= dmg;
       log(round, "hit", { side: atkKey, attacker: label(attacker), target: label(target),
-        dmg, targetHp: Math.max(target.hp, 0) });
+        dmg, targetHp: Math.max(target.hp, 0), crit });
       if (!alive(target)) {
         log(round, "break", { side: defKey, part: label(target), kind: target.kind });
         if (target.kind === "head") { stunNext[defKey] = true; log(round, "stun_set", { side: defKey }); }
@@ -203,7 +220,11 @@
             }
             cmdPool[atkKey] -= 1;
           }
-          resolve(roundNo, atkKey, part);
+          // 多段攻击(猛犸象头"双击"):每段独立结算,整体只耗 1 指挥点
+          for (let h = 0; h < part.hits; h++) {
+            if (winner || !alive(part)) break;
+            resolve(roundNo, atkKey, part);
+          }
         }
         if (winner) break;
       }
@@ -237,7 +258,26 @@
     "带头踢腿流": { torso: "有些肌肉的躯干", heads: ["新手头"], legs: ["踢腿", "踢腿", "踢腿", "踢腿"] },
   };
 
+  // ===== PVE 战役(Q13,Akun 2026-07-07;奖励/解锁数值见 Q14 待核)=====
+  const STARTER_BUILD = { torso: "新手躯干", heads: ["新手头"], hands: ["装饰手"], legs: ["装饰腿"] };
+  const STARTER_UNLOCKED = ["新手躯干", "新手头", "装饰手", "装饰腿"];
+  const STARTER_BUDGET = 700;
+  const CAMPAIGN = [
+    { lv: 1, name: "老迈的鹿", reward: 200, unlocks: ["新手手", "新手腿", "新手尾巴"],
+      enemy: { torso: "鹿躯干" },
+      story: "你从朦胧中醒来,漫步在一片荒凉的土地上,只感到一阵饥饿袭来……\n那是什么?一个四足行走的动物?\n不,你只觉得那是一团生物质……" },
+    { lv: 2, name: "猛犸象", reward: 300, unlocks: ["猛头", "猛爪", "猛腿"],
+      enemy: { torso: "猛犸象躯干", heads: ["猛犸象头"] },
+      story: "吞下鹿之后,饥饿并未平息。\n雪原尽头,一头披着长毛的庞然大物缓缓转身——\n它的头颅能连续冲撞两次(双击),而它的躯体厚得像一堵墙。" },
+    { lv: 3, name: "笨拙的恐兽", reward: 400,
+      unlocks: ["顶撞头", "肿头", "强力爪", "小手手", "鞭腿", "粗腿", "踢腿",
+                "稍微长大的躯干", "有些肌肉的躯干", "猛尾", "四肢插槽", "头部插槽"],
+      enemy: { torso: "恐兽躯干", heads: ["恐兽头"], hands: ["恐兽爪", "恐兽爪"] },
+      story: "你的身体在膨胀,渴望更多的生物质。\n沼泽深处,一只笨拙的恐兽用双爪拍打着泥水。\n这次,它会还手——不升级装备,你赢不了它。" },
+  ];
+
   return { CATALOG, KIND_CN, makeMonster, makePart, allParts, validate, battle,
            dodgeTotal, initiativeTotal, commandSupply, energyUsed, priceTotal,
-           ARCHETYPES, DEFAULT_CFG, label, alive };
+           ARCHETYPES, DEFAULT_CFG, label, alive,
+           CAMPAIGN, STARTER_BUILD, STARTER_UNLOCKED, STARTER_BUDGET };
 });
