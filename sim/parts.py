@@ -18,6 +18,7 @@ class Part:
     command: int = 0   # 指挥点供给(躯干基础值 / 头提供;手腿出手各耗 1 点)
     crit: float = 0.0  # 暴击率(仅对本部件自己的攻击生效;Akun 2026-07-07 拍板,倍率待定默认 2x)
     hits: int = 1      # 每回合攻击次数(猛犸象头"双击"=2;每次独立结算目标/闪避/格挡,语义待 Akun 确认)
+    hunts: str = ""    # 目标偏好(Q15 机制件原型):"hand"=优先打对方存活的手,打光回退本类默认规则
     price: int = 0
     slot: int = 0      # 同类内槽位编号,从 1 开始
 
@@ -70,6 +71,8 @@ CATALOG = {
     "恐兽头":     dict(kind="head",  atk=5, hp=100, price=0),
     "恐兽躯干":   dict(kind="torso", atk=0, hp=100, supply=99, command=99, price=0),
     "恐兽爪":     dict(kind="hand",  atk=5, hp=25,  price=0),
+    # 机制件原型(Q15 提案,数值未定价,仅供模拟验证;Akun 拍板后再进零件表)
+    "猎臂头":     dict(kind="head",  atk=15, hp=75, energy=20, command=2, hunts="hand", price=400),
 }
 
 

@@ -27,6 +27,8 @@ class RuleConfig:
                                          #   手腿出手各耗 1 点,池空则该肢体本回合不攻击(仍可被打/闪避/格挡)。
                                          #   头不耗点。off=旧规则(对照 A/B 用)。
     crit_mult: float = 2.0               # 暴击伤害倍率(Akun 定了各头暴击率,倍率待定;1.0=关闭暴击)
+    block_overflow: bool = False         # 格挡溢出提案(耗材手流修法A,待 Akun):格挡手血量不够时,
+                                         #   吃不下的伤害继续打原目标——废掉"1血手吞整发重击"
 
 
 @dataclass
@@ -102,7 +104,12 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
         if not sides[enemy_key(atk_key)].torso.alive():
             winner = atk_key
 
-    def choose_target(kind, defender):
+    def choose_target(kind, defender, hunts=""):
+        # 目标偏好(Q15 机制件原型):优先打指定部位,打光回退本类默认规则
+        if hunts:
+            pool = [p for p in defender.parts_of(hunts) if p.alive()]
+            if pool:
+                return rng.choice(pool)
         if kind == "leg":
             pool = [p for p in defender.legs if p.alive()]
             return rng.choice(pool) if pool else defender.torso
@@ -118,7 +125,7 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
     def resolve(round_no, atk_key, attacker: Part):
         def_key = enemy_key(atk_key)
         defender = sides[def_key]
-        target = choose_target(attacker.kind, defender)
+        target = choose_target(attacker.kind, defender, attacker.hunts)
         # 1) 闪避(全身共享,实时计算)
         dv = defender.dodge_total(cfg)
         if dv > 0 and rng.random() < dv:
@@ -136,12 +143,28 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
         if target.kind in ("head", "torso") and blockers and rng.random() < cfg.block_prob:
             blocker = max(blockers, key=lambda h: h.slot)
             bdmg = max(1, math.floor(dmg * cfg.block_mult)) if dmg > 0 else 0
+            overflow = 0
+            if cfg.block_overflow and bdmg > blocker.hp:
+                overflow = bdmg - blocker.hp
+                bdmg = blocker.hp
             blocker.hp -= bdmg
             log(round_no, "block", side=atk_key, attacker=attacker.label,
                 target=target.label, blocker=blocker.label, dmg=dmg, taken=bdmg,
-                blocker_hp=max(blocker.hp, 0), crit=crit)
+                blocker_hp=max(blocker.hp, 0), crit=crit, overflow=overflow)
             if not blocker.alive():
                 log(round_no, "break", side=def_key, part=blocker.label, kind="hand")
+            if overflow > 0:
+                target.hp -= overflow
+                log(round_no, "hit", side=atk_key, attacker=attacker.label,
+                    target=target.label, dmg=overflow, target_hp=max(target.hp, 0),
+                    crit=False, overflow=True)
+                if not target.alive():
+                    log(round_no, "break", side=def_key, part=target.label, kind=target.kind)
+                    if target.kind == "head":
+                        stun_next[def_key] = True
+                        log(round_no, "stun_set", side=def_key)
+                    if target.kind == "torso":
+                        check_end(atk_key)
             return
         # 3) 正常结算(E6 即时死亡)
         target.hp -= dmg
