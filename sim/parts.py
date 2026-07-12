@@ -19,6 +19,7 @@ class Part:
     crit: float = 0.0  # 暴击率(仅对本部件自己的攻击生效;Akun 2026-07-07 拍板,倍率待定默认 2x)
     hits: int = 1      # 每回合攻击次数(猛犸象头"双击"=2;每次独立结算目标/闪避/格挡,语义待 Akun 确认)
     hunts: str = ""    # 目标偏好(Q15 机制件原型):"hand"=优先打对方存活的手,打光回退本类默认规则
+    pve: bool = False  # PVE 专属敌方部件,不可用于玩家配装(builds.validate 拦截)
     price: int = 0
     slot: int = 0      # 同类内槽位编号,从 1 开始
 
@@ -65,18 +66,20 @@ CATALOG = {
     "装饰手":   dict(kind="hand", atk=0, hp=10, energy=0, price=0),
     "装饰腿":   dict(kind="leg",  atk=0, hp=10, energy=0, initiative=0, dodge=0.0, price=0),
     # PVE 专属敌方部件(03-pve 前三关,Akun 2026-07-07 设计;不入玩家目录,不受装配约束)
-    "鹿躯干":     dict(kind="torso", atk=0, hp=50,  supply=99, command=99, price=0),
-    "猛犸象头":   dict(kind="head",  atk=2, hp=75,  hits=2, price=0),   # 双击:2 攻 ×2 次
-    "猛犸象躯干": dict(kind="torso", atk=0, hp=200, supply=99, command=99, price=0),
-    "恐兽头":     dict(kind="head",  atk=5, hp=100, price=0),
-    "恐兽躯干":   dict(kind="torso", atk=0, hp=100, supply=99, command=99, price=0),
-    "恐兽爪":     dict(kind="hand",  atk=5, hp=25,  price=0),
+    "鹿躯干":     dict(kind="torso", atk=0, hp=50,  supply=99, command=99, pve=True, price=0),
+    "猛犸象头":   dict(kind="head",  atk=2, hp=75,  hits=2, pve=True, price=0),   # 双击:2 攻 ×2 次
+    "猛犸象躯干": dict(kind="torso", atk=0, hp=200, supply=99, command=99, pve=True, price=0),
+    "恐兽头":     dict(kind="head",  atk=5, hp=100, pve=True, price=0),
+    "恐兽躯干":   dict(kind="torso", atk=0, hp=100, supply=99, command=99, pve=True, price=0),
+    "恐兽爪":     dict(kind="hand",  atk=5, hp=25,  pve=True, price=0),
     # 机制件原型(Q15 提案,数值未定价,仅供模拟验证;Akun 拍板后再进零件表)
     "猎臂头":     dict(kind="head",  atk=15, hp=75, energy=20, command=2, hunts="hand", price=400),
 }
 
 
 def make(name: str, slot: int = 0) -> Part:
-    spec = CATALOG[name]
+    spec = CATALOG.get(name)
+    if spec is None:
+        raise KeyError(f"未知零件「{name}」——检查拼写,或 sim/parts.py CATALOG 是否与零件表同步")
     return Part(name=name, max_hp=spec["hp"], slot=slot,
                 **{k: v for k, v in spec.items() if k != "hp"}, hp=spec["hp"])

@@ -22,6 +22,17 @@ def build(name, torso, heads=(), hands=(), legs=(), tails=(), slots=()):
 
 
 def validate(m: Monster):
+    # 槽位类型:零件必须装进对应类型的槽
+    for part, want in ([(m.torso, "torso")]
+                       + [(p, "head") for p in m.heads]
+                       + [(p, "hand") for p in m.hands]
+                       + [(p, "leg") for p in m.legs]
+                       + [(p, "tail") for p in m.tails]
+                       + [(p, "slot") for p in m.slots]):
+        assert part.kind == want, f"{m.name}: 「{part.name}」({part.kind})装错槽位(应为 {want})"
+    # PVE 专属件不可用于玩家配装
+    for part in [m.torso, *m.heads, *m.hands, *m.legs, *m.tails]:
+        assert not part.pve, f"{m.name}: 「{part.name}」是 PVE 专属敌方部件,玩家不可用"
     # Q1 能量硬约束
     used, supply = m.energy_used(), m.torso.supply
     assert used <= supply, f"{m.name}: 能量超限 {used}>{supply}"

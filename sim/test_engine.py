@@ -292,6 +292,18 @@ class TestCritAndMultiHit(unittest.TestCase):
         self.assertEqual(len(hits), 2, "双击应产生两次攻击结算")
         self.assertTrue(all(h["dmg"] == 2 for h in hits))
 
+    def test_工程卫生_未知零件与槽位类型与PVE边界(self):
+        from .parts import make
+        from .builds import build
+        with self.assertRaises(KeyError):
+            make("不存在的零件")
+        # 零件装错槽位(手塞进腿槽)→ validate 拒绝
+        with self.assertRaises(AssertionError):
+            build("错槽", "新手躯干", legs=["新手手"])
+        # PVE 专属件不可用于玩家配装
+        with self.assertRaises(AssertionError):
+            build("偷跑", "新手躯干", heads=["猛犸象头"])
+
     def test_PVE配置_老迈的鹿不还手(self):
         deer = mk("鹿", torso="鹿躯干")
         player = mk("玩家", heads=["新手头"], hands=["装饰手"], legs=["装饰腿"])

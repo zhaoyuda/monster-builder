@@ -49,11 +49,13 @@
 
   function makePart(name, slot) {
     const s = CATALOG[name];
+    if (!s) throw new Error(`未知零件「${name}」——检查拼写或 CATALOG 是否与零件表同步`);
     return {
       name, slot: slot || 0, kind: s.kind, atk: s.atk || 0,
       hp: s.hp, maxHp: s.hp, energy: s.energy || 0, supply: s.supply || 0,
       initiative: s.initiative || 0, dodge: s.dodge || 0,
-      command: s.command || 0, crit: s.crit || 0, hits: s.hits || 1, price: s.price || 0,
+      command: s.command || 0, crit: s.crit || 0, hits: s.hits || 1,
+      pve: !!s.pve, price: s.price || 0,
     };
   }
   const alive = (p) => p.hp > 0;
@@ -82,9 +84,16 @@
   const priceTotal = (m) =>
     [...allParts(m), ...m.tails, ...m.slots].reduce((s, p) => s + p.price, 0);
 
-  // 装配校验(Q1 能量 / Q2 槽位)—— 返回违规信息数组,空即合法
+  // 装配校验(Q1 能量 / Q2 槽位 / 槽位类型 / PVE 边界)—— 返回违规信息数组,空即合法
   function validate(m) {
     const errs = [];
+    const groups = [[[m.torso], "torso"], [m.heads, "head"], [m.hands, "hand"],
+                    [m.legs, "leg"], [m.tails, "tail"], [m.slots, "slot"]];
+    for (const [list, want] of groups)
+      for (const p of list) {
+        if (p.kind !== want) errs.push(`「${p.name}」(${KIND_CN[p.kind] || p.kind})装错槽位`);
+        if (p.pve) errs.push(`「${p.name}」是 PVE 专属敌方部件,玩家不可用`);
+      }
     const used = energyUsed(m), sup = m.torso.supply;
     if (used > sup) errs.push(`能量超限:需求 ${used} > 供能 ${sup}`);
     const headSlots = 1 + m.slots.filter((s) => s.name === "头部插槽").length;
