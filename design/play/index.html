@@ -89,6 +89,28 @@
   .lv .blockmsg { font-size: 12px; color: var(--bad); margin-top: 6px; }
   .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; background: var(--acc2); color: #fff; padding: 12px 18px; border-radius: 12px; font-weight: 700; z-index: 99; box-shadow: 0 8px 30px rgba(0,0,0,.5); display: none; max-width: 90vw; }
   .lock { opacity: .45; }
+  /* 纸偶怪兽 */
+  .stage { display: flex; justify-content: space-around; align-items: flex-end; padding: 10px 4px 14px; min-height: 150px; background: radial-gradient(ellipse at 50% 120%, #241f38 0%, transparent 70%); border-radius: 12px; }
+  .doll { display: flex; flex-direction: column; align-items: center; gap: 3px; transition: transform .18s; position: relative; }
+  .drow { display: flex; gap: 4px; align-items: flex-end; justify-content: center; }
+  .dmid { align-items: center; }
+  .dpart { position: relative; border: 2px solid rgba(0,0,0,.45); box-shadow: inset 0 -5px rgba(0,0,0,.22), inset 0 3px rgba(255,255,255,.14); transition: transform .16s, opacity .4s, filter .4s; }
+  .dpart.head { width: 26px; height: 26px; border-radius: 50% 50% 42% 42%; }
+  .dpart.hand { width: 20px; height: 20px; border-radius: 7px 7px 10px 4px; }
+  .dpart.leg  { width: 13px; height: 27px; border-radius: 5px 5px 6px 6px; }
+  .dpart.torso{ width: 62px; height: 54px; border-radius: 16px 16px 20px 20px; }
+  .dpart.tail { width: 22px; height: 12px; border-radius: 2px 12px 12px 2px; transform: skewX(-18deg); align-self: center; }
+  .dpart.deco { border-style: dashed; opacity: .8; }
+  .dpart .eye { position: absolute; top: 7px; left: 6px; width: 5px; height: 5px; border-radius: 50%; background: #14121f; box-shadow: 9px 0 0 #14121f; }
+  .dpart.dead { filter: grayscale(1); opacity: .3; transform: rotate(22deg) translateY(5px); }
+  .doll.lungeL { transform: translateX(-12px); }
+  .doll.lungeR { transform: translateX(12px); }
+  .doll.step  { transform: translateX(-8px) rotate(-3deg); }
+  @keyframes hitflash { 0% { filter: brightness(2.4) saturate(.2); transform: translateX(2px); } 60% { transform: translateX(-2px); } 100% {} }
+  .dpart.hitfx { animation: hitflash .32s; }
+  @keyframes floatup { 0% { opacity: 0; transform: translate(-50%, 2px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -22px); } }
+  .fxlabel { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 800; white-space: nowrap; pointer-events: none; animation: floatup .9s forwards; z-index: 6; text-shadow: 0 1px 3px #000; }
+  .buildStage { display: flex; justify-content: center; padding: 8px 0 4px; }
 </style>
 </head>
 <body>
@@ -128,6 +150,7 @@
 
     <div class="card">
       <h2>我的怪兽</h2>
+      <div class="buildStage"><div id="buildDoll"></div></div>
       <div class="statbar" id="stats"></div>
       <div class="errbox" id="errs"></div>
       <div class="warnbox" id="warns"></div>
@@ -157,6 +180,7 @@
     </div>
 
     <div class="card">
+      <div class="stage"><div id="dollA"></div><div id="dollB"></div></div>
       <div class="arena">
         <div class="side A"><h3>😤 <span id="nameA">我的怪兽</span> <span class="price" id="priceA"></span></h3><div id="partsA"></div></div>
         <div class="side B"><h3>👿 <span id="nameB">对手</span> <span class="price" id="priceB"></span></h3><div id="partsB"></div></div>
@@ -246,6 +270,69 @@ function statStr(n) {
 
 function monster() { return E.makeMonster("我的怪兽", build); }
 
+// ===== 纸偶渲染:怪兽长相 = 配装记录 =====
+function partHue(name) {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.codePointAt(0)) % 360;
+  return h;
+}
+function partColor(p) {
+  const sat = p.name.startsWith("装饰") ? 18 : 55;
+  return `hsl(${partHue(p.name)} ${sat}% ${p.kind === "torso" ? 42 : 55}%)`;
+}
+function dollPartHTML(p, sideKey) {
+  const deco = p.name.startsWith("装饰") ? " deco" : "";
+  const eye = p.kind === "head" ? '<i class="eye"></i>' : "";
+  const key = p.kind === "torso" ? p.name : E.label(p);
+  return `<div class="dpart ${p.kind}${deco}" data-dk="${sideKey}|${key}" title="${key}" style="background:${partColor(p)}">${eye}</div>`;
+}
+function dollHTML(m, sideKey) {
+  const heads = m.heads.map((p) => dollPartHTML(p, sideKey)).join("");
+  const hands = m.hands.map((p) => dollPartHTML(p, sideKey));
+  const half = Math.ceil(hands.length / 2);
+  const tails = m.tails.map((p) => dollPartHTML(p, sideKey)).join("");
+  const legs = m.legs.map((p) => dollPartHTML(p, sideKey)).join("");
+  return `<div class="doll" id="doll${sideKey}In">
+    <div class="drow">${heads || ""}</div>
+    <div class="drow dmid">${hands.slice(0, half).join("")}${dollPartHTML(m.torso, sideKey)}${hands.slice(half).join("")}${tails}</div>
+    <div class="drow">${legs}</div>
+  </div>`;
+}
+function dollEl(sideKey, key) {
+  return document.querySelector(`[data-dk="${sideKey}|${key}"]`);
+}
+function dollFx(sideKey, key, label, color) {
+  const el = dollEl(sideKey, key);
+  if (!el) return;
+  el.classList.remove("hitfx");
+  void el.offsetWidth;   // 重启动画
+  el.classList.add("hitfx");
+  if (label) {
+    const s = document.createElement("span");
+    s.className = "fxlabel";
+    s.textContent = label;
+    if (color) s.style.color = color;
+    el.appendChild(s);
+    setTimeout(() => s.remove(), 900);
+  }
+}
+function dollLunge(sideKey) {
+  const d = $("doll" + sideKey + "In");
+  if (!d) return;
+  d.classList.add(sideKey === "A" ? "lungeR" : "lungeL");
+  setTimeout(() => d.classList.remove("lungeR", "lungeL"), 170);
+}
+function dollStep(sideKey) {
+  const d = $("doll" + sideKey + "In");
+  if (!d) return;
+  d.classList.add("step");
+  setTimeout(() => d.classList.remove("step"), 200);
+}
+function dollKill(sideKey, key) {
+  const el = dollEl(sideKey, key);
+  if (el) el.classList.add("dead");
+}
+
 function renderBuild() {
   const m = monster();
   const errs = E.validate(m);
@@ -255,6 +342,7 @@ function renderBuild() {
   const nLimbSlotUsed = build.hands.length + build.legs.length + build.tails.length;
   const eu = E.energyUsed(m), sup = m.torso.supply;
 
+  $("buildDoll").innerHTML = dollHTML(m, "P");
   const price = E.priceTotal(m), bud = budget();
   $("stats").innerHTML = [
     `<span class="${price > bud ? "warn" : ""}">🧬 生物质 <b>${price}/${bud}</b></span>`,
@@ -419,7 +507,7 @@ function renderArena(a, b) {
   for (const [key, m] of [["A", a], ["B", b]]) {
     $("name" + key).textContent = m.name;
     $("price" + key).textContent = "💰" + E.priceTotal(m);
-    view[key] = {};
+    view[key] = { _torso: m.torso.name };
     let html = "";
     for (const p of E.allParts(m)) {
       const id = key + "_" + (p.kind === "torso" ? p.name : E.label(p));
@@ -427,6 +515,7 @@ function renderArena(a, b) {
       html += partRow(p, id);
     }
     $("parts" + key).innerHTML = html;
+    $("doll" + key).innerHTML = dollHTML(m, key);
   }
 }
 function setHp(sideKey, lbl, hp) {
@@ -461,9 +550,36 @@ function evLine(ev) {
   if (t === "timeout") return [`⏱ 打满回合上限,按躯干血量比判定`, "rhead"];
   return null;
 }
-function applyEv(ev) {
-  if (ev.type === "hit") setHp(other(ev.side), ev.target, ev.targetHp);
-  else if (ev.type === "block") setHp(other(ev.side), ev.blocker, ev.blockerHp);
+function applyEv(ev, fx) {
+  const t = ev.type;
+  if (t === "hit") {
+    setHp(other(ev.side), ev.target, ev.targetHp);
+    if (fx) {
+      dollLunge(ev.side);
+      dollFx(other(ev.side), ev.target, (ev.crit ? "💥" : "") + "-" + ev.dmg, ev.crit ? "#fbbf24" : "#f87171");
+    }
+  } else if (t === "block") {
+    setHp(other(ev.side), ev.blocker, ev.blockerHp);
+    if (fx) {
+      dollLunge(ev.side);
+      dollFx(other(ev.side), ev.blocker, "🛡-" + ev.taken, "#8bd5ff");
+    }
+  } else if (t === "dodge") {
+    if (fx) {
+      dollLunge(ev.side);
+      dollStep(other(ev.side));
+      dollFx(other(ev.side), view[other(ev.side)]._torso, "💨闪避", "#8bd5ff");
+    }
+  } else if (t === "break") {
+    dollKill(ev.side, ev.part);
+    if (fx) dollFx(ev.side, ev.part, "💀", "#f87171");
+  } else if (t === "no_command") {
+    if (fx) dollFx(ev.side, ev.part, "🚫站桩", "#9b93b8");
+  } else if (t === "stunned") {
+    if (fx) dollFx(ev.side, view[ev.side]._torso, "💫眩晕", "#fbbf24");
+  } else if (t === "stun_set") {
+    if (fx) dollFx(ev.side, view[ev.side]._torso, "⚡头被毁!", "#fbbf24");
+  }
 }
 
 let curSeed = null, curCamp = null;
@@ -486,13 +602,13 @@ function startBattle(seed, campLevel) {
   const step = () => {
     if (i >= evs.length) return finish(rep);
     if (speedMs === 0) {
-      for (; i < evs.length; i++) { const l = evLine(evs[i]); if (l) logLine(l[0], l[1]); applyEv(evs[i]); }
+      for (; i < evs.length; i++) { const l = evLine(evs[i]); if (l) logLine(l[0], l[1]); applyEv(evs[i], false); }
       return finish(rep);
     }
     const ev = evs[i++];
     const l = evLine(ev);
     if (l) logLine(l[0], l[1]);
-    applyEv(ev);
+    applyEv(ev, true);
     playTimer = setTimeout(step, l ? speedMs : 0);
   };
   step();
