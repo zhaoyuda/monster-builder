@@ -1,19 +1,28 @@
 # 典型流派配装 —— 用于烟雾测试评审报告里的"疑似退化流派"
-# 装配约束(Akun 2026-07-03 拍板;2026-07-15 插件表更新):
-#   Q1 能量硬约束:Σ能量需求 ≤ 供能(躯干 + 能量核心)
+# 装配约束(Akun 2026-07-03 拍板;2026-07-15 插件表更新;Q17e 插件规则):
+#   Q1 能量硬约束:Σ能量需求 ≤ 供能(躯干 + 能量核心插件)
 #   Q2 槽位:所有躯干自带 1头 / 4四肢(手+腿);头部插槽 +1 头位,四肢插槽 +1 手/腿位
 #   Q9(已答):尾巴是独立位,不占四肢槽;数量上限未定,暂按 1
+#   Q17e:插件随宿主、每个部件最多 1 个插件、躯干插件也限 1(普通能量核心/耐火皮肤/尖刺皮肤竞争同一位)
+# 部件写法:"猛爪" 或 ("猛爪", "骨盾")(带插件);躯干插件用 torso_plugin=
 from .engine import Monster
-from .parts import make
+from .parts import make, PLUGINS
 
 
-def build(name, torso, heads=(), hands=(), legs=(), tails=(), slots=()):
+def _mk(entry, i):
+    if isinstance(entry, (tuple, list)):
+        name, plugin = entry
+        return make(name, i + 1, plugin)
+    return make(entry, i + 1)
+
+
+def build(name, torso, heads=(), hands=(), legs=(), tails=(), slots=(), torso_plugin=""):
     m = Monster(
         name=name,
-        torso=make(torso),
-        heads=[make(n, i + 1) for i, n in enumerate(heads)],
-        hands=[make(n, i + 1) for i, n in enumerate(hands)],
-        legs=[make(n, i + 1) for i, n in enumerate(legs)],
+        torso=make(torso, 0, torso_plugin),
+        heads=[_mk(n, i) for i, n in enumerate(heads)],
+        hands=[_mk(n, i) for i, n in enumerate(hands)],
+        legs=[_mk(n, i) for i, n in enumerate(legs)],
         tails=[make(n, i + 1) for i, n in enumerate(tails)],
         slots=[make(n, i + 1) for i, n in enumerate(slots)],
     )
@@ -30,22 +39,29 @@ def validate(m: Monster):
                        + [(p, "tail") for p in m.tails]
                        + [(p, "slot") for p in m.slots]):
         assert part.kind == want, f"{m.name}: 「{part.name}」({part.kind})装错槽位(应为 {want})"
-    # PVE 专属件不可用于玩家配装
+    # PVE 专属件 / 衍生件(芽孢长出来的手)不可直接装配
     for part in [m.torso, *m.heads, *m.hands, *m.legs, *m.tails]:
         assert not part.pve, f"{m.name}: 「{part.name}」是 PVE 专属敌方部件,玩家不可用"
+        assert not part.derived, f"{m.name}: 「{part.name}」是战斗中长出的衍生部件,不可直接装配"
+    # Q17e 插件:位置匹配(每部件限 1 由 Part.plugin 单字段天然保证;躯干限 1 同理)
+    for part in m.all_parts():
+        if part.plugin:
+            pos = PLUGINS[part.plugin]["pos"]
+            assert part.kind in pos, \
+                f"{m.name}: 插件「{part.plugin}」只能装在 {'/'.join(pos)},不能装在「{part.name}」({part.kind})"
     # Q1 能量硬约束(供能 = 躯干 + 能量核心插件)
     used, supply = m.energy_used(), m.supply_total()
     assert used <= supply, f"{m.name}: 能量超限 {used}>{supply}"
-    # Q2 槽位约束;尾巴独立位不占四肢槽(Akun 2026-07-15 插件表「位置:尾巴(独立)」,Q9 的回答)
+    # Q2 槽位约束;尾巴独立位不占四肢槽(Q9)
     head_slots = 1 + sum(1 for s in m.slots if s.name == "头部插槽")
     limb_slots = 4 + sum(1 for s in m.slots if s.name == "四肢插槽")
     assert len(m.heads) <= head_slots, f"{m.name}: 头槽超限 {len(m.heads)}>{head_slots}"
     n_limbs = len(m.hands) + len(m.legs)
     assert n_limbs <= limb_slots, f"{m.name}: 四肢槽超限 {n_limbs}>{limb_slots}"
     assert len(m.tails) <= 1, f"{m.name}: 尾巴独立位暂限 1 条(上限待 Akun 定)"
-    # 「每个零部件最多安装一个插件」→ 躯干身体位暂限 1 个能量核心(工程默认)
-    n_core = sum(1 for s in m.slots if s.name == "普通能量核心")
-    assert n_core <= 1, f"{m.name}: 能量核心限 1 个(躯干只有一个身体插件位)"
+    # 旧版兼容:普通能量核心已改为躯干插件,不能再塞 slots(make 会直接报错,这里兜底)
+    assert not any(s.name == "普通能量核心" for s in m.slots), \
+        f"{m.name}: 普通能量核心是躯干插件,用 torso_plugin= 挂载"
     return m
 
 
@@ -74,6 +90,11 @@ ARCHETYPES = {
     # 肉盾流:大躯干 + 高血部件磨死对面
     "肉盾流": lambda: build("肉盾流", "稍微长大的躯干",
                             heads=["肿头"], hands=["小手手"], legs=["灵活的腿"]),
+    # 机制流:喷火 AOE + 抓握控闪避 + 芽孢重生 + 插件(Q17 机制引擎验证用)
+    "机制流": lambda: build("机制流", "有些肌肉的躯干", torso_plugin="尖刺皮肤",
+                            heads=["喷火头"],
+                            hands=[("抓握手", "爆裂腺体"), ("长有芽孢的手", "胶质瘤")],
+                            legs=[("新手腿", "碎骨锥")]),
 }
 
 

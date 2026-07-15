@@ -15,6 +15,16 @@ HANDS = ["新手手", "猛爪", "强力爪", "小手手"]
 LEGS = ["新手腿", "猛腿", "鞭腿", "灵活的腿", "踢腿"]
 TAILS = ["新手尾巴", "猛尾"]
 TORSOS = ["新手躯干", "稍微长大的躯干", "有些肌肉的躯干"]
+# 机制件与插件(--variant mech 时进入采样池;Q17 机制引擎 2026-07-15)
+MECH_HEADS = ["喷火头"]
+MECH_HANDS = ["抓握手", "长有芽孢的手"]
+PLUGINS_BY_KIND = {
+    "head": ["头顶角质层", "头顶尖刺"],
+    "hand": ["骨盾", "胶质瘤", "爆裂腺体", "撕裂爪"],
+    "leg":  ["肾上腺素", "爆裂腺体", "碎骨锥"],
+    "torso": ["耐火皮肤", "尖刺皮肤", "普通能量核心"],
+}
+PLUGIN_PROB = 0.35   # 每个部件挂插件的采样概率(躯干单独 0.5)
 
 BUDGET = 1800
 MIN_PRICE = 1500          # 只研究"把预算基本花完"的配装,避免便宜垫底货污染统计
@@ -48,24 +58,39 @@ def apply_variant(variant):
     return RuleConfig()
 
 
-def gen_spec(rng):
+def _entry(rng, name, kind, mech):
+    """按概率给部件挂一个位置合法的插件;返回 "名" 或 (名, 插件)。"""
+    if mech and rng.random() < PLUGIN_PROB:
+        return (name, rng.choice(PLUGINS_BY_KIND[kind]))
+    return name
+
+
+def gen_spec(rng, mech=False):
     """拒绝采样一个合法(能量/槽位/预算)且花钱 ≥ MIN_PRICE 的配装。"""
+    heads_pool = HEADS + (MECH_HEADS if mech else [])
+    hands_pool = HANDS + (MECH_HANDS if mech else [])
     while True:
         torso = rng.choice(TORSOS)
         n_heads = rng.choice([0, 1, 1, 1, 2])
         n_hands = rng.randint(0, 4)
         n_legs = rng.randint(0, 4)
         n_tails = rng.choice([0, 0, 0, 1])   # 尾巴独立位,限 1(Akun 2026-07-15)
-        n_core = rng.choice([0, 0, 0, 1])    # 普通能量核心(供能+20,限 1)
         if not 1 <= n_hands + n_legs + n_tails + n_heads <= 7:
             continue
+        if mech:
+            tp = rng.choice(["", "", "普通能量核心", "耐火皮肤", "尖刺皮肤", "普通能量核心"]) \
+                if rng.random() < 0.5 else ""
+        else:
+            tp = "普通能量核心" if rng.random() < 0.25 else ""   # 旧口径:1/4 概率带核心
         spec = dict(
-            torso=torso,
-            heads=sorted(rng.choice(HEADS) for _ in range(n_heads)),
-            hands=sorted(rng.choice(HANDS) for _ in range(n_hands)),
-            legs=sorted(rng.choice(LEGS) for _ in range(n_legs)),
+            torso=torso, torso_plugin=tp,
+            heads=sorted((_entry(rng, rng.choice(heads_pool), "head", mech) for _ in range(n_heads)),
+                         key=str),
+            hands=sorted((_entry(rng, rng.choice(hands_pool), "hand", mech) for _ in range(n_hands)),
+                         key=str),
+            legs=sorted((_entry(rng, rng.choice(LEGS), "leg", mech) for _ in range(n_legs)),
+                        key=str),
             tails=sorted(rng.choice(TAILS) for _ in range(n_tails)),
-            core=n_core,
         )
         m = build(spec)
         if m.energy_used() > m.supply_total():
@@ -75,32 +100,39 @@ def gen_spec(rng):
         return spec
 
 
+def _mk(entry, i):
+    if isinstance(entry, (tuple, list)):
+        return make(entry[0], i + 1, entry[1])
+    return make(entry, i + 1)
+
+
 def build(spec):
     n_limbs = len(spec["hands"]) + len(spec["legs"])   # 尾巴不占四肢槽
     slots = (["头部插槽"] * max(0, len(spec["heads"]) - 1)
-             + ["四肢插槽"] * max(0, n_limbs - 4)
-             + ["普通能量核心"] * spec.get("core", 0))
+             + ["四肢插槽"] * max(0, n_limbs - 4))
     return Monster(
         name=label(spec),
-        torso=make(spec["torso"]),
-        heads=[make(n, i + 1) for i, n in enumerate(spec["heads"])],
-        hands=[make(n, i + 1) for i, n in enumerate(spec["hands"])],
-        legs=[make(n, i + 1) for i, n in enumerate(spec["legs"])],
+        torso=make(spec["torso"], 0, spec.get("torso_plugin", "")),
+        heads=[_mk(n, i) for i, n in enumerate(spec["heads"])],
+        hands=[_mk(n, i) for i, n in enumerate(spec["hands"])],
+        legs=[_mk(n, i) for i, n in enumerate(spec["legs"])],
         tails=[make(n, i + 1) for i, n in enumerate(spec["tails"])],
         slots=[make(n, i + 1) for i, n in enumerate(slots)],
     )
 
 
 def label(spec):
+    def one(e):
+        return f"{e[0]}·{e[1]}" if isinstance(e, (tuple, list)) else e
     def grp(names):
-        c = Counter(names)
+        c = Counter(one(n) for n in names)
         return "+".join(f"{n}x{k}" if k > 1 else n for n, k in sorted(c.items()))
     bits = [spec["torso"].replace("的躯干", "").replace("躯干", "")]
+    if spec.get("torso_plugin"):
+        bits[0] += f"·{spec['torso_plugin']}"
     for key in ("heads", "hands", "legs", "tails"):
         if spec[key]:
             bits.append(grp(spec[key]))
-    if spec.get("core"):
-        bits.append("能量核心")
     return "|".join(bits)
 
 
@@ -119,22 +151,28 @@ def comp_stats(specs):
     headless = sum(1 for s in specs if not s["heads"]) / n
     hand_major = sum(1 for s in specs
                      if len(s["hands"]) > len(s["legs"]) + len(s["tails"])) / n
+    def n_plugged(s):
+        return (sum(1 for e in [*s["heads"], *s["hands"], *s["legs"]]
+                    if isinstance(e, (tuple, list)))
+                + (1 if s.get("torso_plugin") else 0))
     return (f"无头 {headless:.0%},手占多数 {hand_major:.0%},"
             f"平均 头{sum(len(s['heads']) for s in specs)/n:.1f}"
             f"/手{sum(len(s['hands']) for s in specs)/n:.1f}"
-            f"/腿{sum(len(s['legs']) for s in specs)/n:.1f}")
+            f"/腿{sum(len(s['legs']) for s in specs)/n:.1f}"
+            f"/插件{sum(n_plugged(s) for s in specs)/n:.1f}")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="baseline",
-                    choices=["baseline", "muscle2", "atk15", "hand125", "combo"])
+                    choices=["baseline", "muscle2", "atk15", "hand125", "combo", "mech"])
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
 
     cfg = apply_variant(args.variant)
     rng = random.Random(args.seed)
-    specs = dedupe([gen_spec(rng) for _ in range(SAMPLE)])
+    mech = args.variant == "mech"
+    specs = dedupe([gen_spec(rng, mech) for _ in range(SAMPLE)])
     mons = [build(s) for s in specs]
     n = len(specs)
     print(f"# 变体 {args.variant}:{n} 个去重合法配装(预算 {MIN_PRICE}-{BUDGET})")

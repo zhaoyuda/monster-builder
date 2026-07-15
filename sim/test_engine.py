@@ -306,12 +306,15 @@ class TestCritAndMultiHit(unittest.TestCase):
             build("偷跑", "新手躯干", heads=["猛犸象头"])
 
     def test_插件更新_能量核心与尾巴独立位(self):
-        # Akun 2026-07-15 插件表:普通能量核心 +20 供能;尾巴独立位不占四肢槽、暂限 1
+        # 普通能量核心 +20 供能(机制引擎后改为躯干"身体"位插件);尾巴独立位、暂限 1
         from .builds import build
-        build("核心", "新手躯干", heads=["新手头"], hands=["猛爪", "猛爪", "猛爪", "猛爪"],
-              slots=["普通能量核心"])                  # 能量 50 ≤ 30+20
+        m = build("核心", "新手躯干", heads=["新手头"], hands=["猛爪", "猛爪", "猛爪", "猛爪"],
+                  torso_plugin="普通能量核心")          # 能量 50 ≤ 30+20
+        self.assertEqual(m.supply_total(), 50)
         with self.assertRaises(AssertionError):        # 不加核心 → 能量超限
             build("超能", "新手躯干", heads=["新手头"], hands=["猛爪", "猛爪", "猛爪", "猛爪"])
+        with self.assertRaises(KeyError):              # 旧写法:核心塞 slots → 报"是插件"
+            build("旧核心", "新手躯干", slots=["普通能量核心"])
         build("尾独立", "有些肌肉的躯干", hands=["猛爪", "猛爪", "猛爪", "猛爪"], tails=["猛尾"])
         with self.assertRaises(AssertionError):        # 尾巴限 1
             build("双尾", "新手躯干", tails=["新手尾巴", "猛尾"])
@@ -333,6 +336,223 @@ class TestCritAndMultiHit(unittest.TestCase):
         self.assertEqual(rep["winner"], "A")
         deer_atks = [e for e in rep["events"] if e["type"] in ("hit", "dodge", "block") and e["side"] == "B"]
         self.assertEqual(deer_atks, [], "鹿没有攻击部件,不应有任何攻击事件")
+
+
+def mkp(name="M", torso="新手躯干", torso_plugin="", heads=(), hands=(), legs=(), tails=()):
+    """支持插件的组装(不走 validate,方便造极端测试态);entry 可为 "名" 或 ("名","插件")。"""
+    def _mk(entry, i):
+        if isinstance(entry, (tuple, list)):
+            return make(entry[0], i + 1, entry[1])
+        return make(entry, i + 1)
+    return Monster(name=name, torso=make(torso, 0, torso_plugin),
+                   heads=[_mk(n, i) for i, n in enumerate(heads)],
+                   hands=[_mk(n, i) for i, n in enumerate(hands)],
+                   legs=[_mk(n, i) for i, n in enumerate(legs)],
+                   tails=[make(n, i + 1) for i, n in enumerate(tails)])
+
+
+class TestMechanics(unittest.TestCase):
+    """Q17 机制引擎:DoT / 死亡触发 / 部件级眩晕 / 插件挂载(规则:06-decisions.md Q17 + 05 页 Q19 工程默认)。"""
+
+    def _events(self, rep, etype, **match):
+        return [e for e in rep["events"] if e["type"] == etype
+                and all(e.get(k) == v for k, v in match.items())]
+
+    # ---- 喷火头:火焰 AOE + 灼烧 ----
+    def test_喷火头_额外目标与灼烧(self):
+        a = mkp("A", heads=["喷火头"])
+        b = mkp("B", torso="稍微长大的躯干", hands=["猛爪"])
+        # randoms: 先攻0.0→A先;(B猛爪打A躯干无掷骰);A头目标0.9→躯干;额外目标=choice(无掷骰)
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.0, 0.9]))
+        hits = self._events(rep, "hit", side="A")
+        self.assertEqual(len(hits), 2, "喷火头应主目标+额外目标各打一次")
+        self.assertTrue(any(h["extra"] for h in hits))
+        self.assertEqual(len(self._events(rep, "status", status="burn")), 2, "两个受伤目标都应被灼烧")
+        ticks = self._events(rep, "dot_tick", status="burn")
+        self.assertEqual(len(ticks), 2)
+        self.assertTrue(all(t["dmg"] == 2 for t in ticks))
+
+    def test_灼烧_持续3回合且来源死亡不中断(self):
+        a = mkp("A", heads=["喷火头"])
+        a.heads[0].hp = 1                                # 喷火头一击即碎
+        b = mkp("B", torso="稍微长大的躯干", heads=["猛头"])
+        # R1: A先(0.0);A头目标0.4→打B猛头,灼烧;额外目标→B躯干,灼烧;B头目标0.4→打A喷火头(20伤秒杀)
+        rep = battle(a, b, cfg=RuleConfig(round_limit=6), rng=ScriptRNG([0.0, 0.4, 0.4]))
+        ticks = self._events(rep, "dot_tick", status="burn")
+        self.assertEqual(len(ticks), 6, "2 个部件 × 3 回合灼烧,来源(喷火头)已死仍然烧完")
+        self.assertFalse([t for t in ticks if t["round"] > 3], "灼烧只应持续到第 3 回合")
+
+    def test_耐火皮肤_火焰减半且免疫灼烧(self):
+        a = mkp("A", heads=["喷火头"])
+        b = mkp("B", torso_plugin="耐火皮肤")            # 新手躯干 100 血
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.0, 0.9]))
+        hit = self._events(rep, "hit")[0]
+        self.assertTrue(hit["fireproof"])
+        self.assertEqual(hit["dmg"], 7, "floor(15×0.5)=7")
+        self.assertFalse(self._events(rep, "status"), "耐火宿主不应被灼烧")
+        self.assertFalse(self._events(rep, "dot_tick"))
+
+    # ---- 撕裂爪 / 尖刺皮肤 ----
+    def test_撕裂爪_减2攻且命中挂撕裂(self):
+        a = mkp("A", hands=[("猛爪", "撕裂爪")])
+        b = mkp("B", hands=["猛爪"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.0]))
+        hit = self._events(rep, "hit", side="A")[0]
+        self.assertEqual(hit["dmg"], 8, "猛爪 10 攻挂撕裂爪 -2 = 8")
+        self.assertTrue(self._events(rep, "status", status="tear", side="B"))
+        self.assertTrue(self._events(rep, "dot_tick", status="tear", side="B"))
+
+    def test_尖刺皮肤_躯干受伤反挂撕裂到攻击部件(self):
+        a = mkp("A", heads=["猛头"])
+        b = mkp("B", torso_plugin="尖刺皮肤")
+        # randoms: 先攻0.0;头目标0.9→躯干;暴击0.99→无
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.0, 0.9, 0.99]))
+        st = self._events(rep, "status", status="tear", side="A")
+        self.assertTrue(st and "猛头" in st[0]["part"], "撕裂应挂在攻击方的猛头上")
+        self.assertTrue(self._events(rep, "dot_tick", status="tear", side="A"))
+
+    # ---- 碎骨锥:部件级眩晕 ----
+    def test_碎骨锥_命中50概率下回合部件不能行动(self):
+        a = mkp("A", legs=[("踢腿", "碎骨锥")])
+        b = mkp("B", legs=["猛腿"])
+        # R1: 先攻p_a=0→B先(0.5);B猛腿打A踢腿(A闪避0无掷骰);A踢腿打B猛腿:闪避0.9→中;碎骨0.3<0.5→眩
+        # R2: 先攻(0.5);B猛腿被部件眩晕不出手;A踢腿:闪避0.9→中;碎骨0.9→无
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2),
+                     rng=ScriptRNG([0.5, 0.9, 0.3, 0.5, 0.9, 0.9]))
+        self.assertTrue(self._events(rep, "part_stun_set", side="B", round=1))
+        self.assertTrue(self._events(rep, "part_stunned", side="B", round=2))
+        b_atks_r2 = [e for e in rep["events"] if e["round"] == 2 and e.get("side") == "B"
+                     and e["type"] in ("hit", "dodge", "block")]
+        self.assertEqual(b_atks_r2, [], "被碎骨锥眩晕的猛腿下回合不应出手")
+
+    # ---- 抓握手 ----
+    def test_抓握手_首次命中不伤害且清零闪避_闪避掉不消耗(self):
+        a = mkp("A", hands=["抓握手"])
+        b = mkp("B", legs=["新手腿", "新手腿"])          # 10% 闪避
+        # 每回合:先攻p_a=0→B先;B两腿打A躯干各掷1次格挡骰(A有手,0.9→不格挡)
+        # R1: A抓握:闪避0.05<0.10→被闪掉(不消耗首次)
+        # R2: A抓握:闪避0.5→未闪→抓住!5回合闪避清零,无伤害
+        # R3: A攻击:闪避被清零无掷骰→直接命中 10 伤
+        rep = battle(a, b, cfg=RuleConfig(round_limit=3),
+                     rng=ScriptRNG([0.5, 0.9, 0.9, 0.05,
+                                    0.5, 0.9, 0.9, 0.5,
+                                    0.5, 0.9, 0.9]))
+        self.assertTrue(self._events(rep, "dodge", side="A", round=1), "首次尝试应被闪避")
+        grabs = self._events(rep, "grab", side="A")
+        self.assertEqual([g["round"] for g in grabs], [2], "第二次尝试才抓住,且只抓一次")
+        self.assertFalse(self._events(rep, "hit", side="A", round=2), "抓住的那次不造成伤害")
+        hit3 = self._events(rep, "hit", side="A", round=3)
+        self.assertTrue(hit3 and hit3[0]["dmg"] == 10, "抓握后闪避清零,第三回合直接命中")
+
+    # ---- 头顶角质层 ----
+    def test_角质层_替头吸收两次攻击(self):
+        a = mkp("A", heads=["猛头"])
+        b = mkp("B", heads=[("新手头", "头顶角质层")])
+        # 每回合: 先攻0.0→A;A头目标0.4→打B头;暴击0.99;(吸收后B头反击:目标0.4→A头,新手头无暴击)
+        seq = [0.0, 0.4, 0.99, 0.4] * 3
+        rep = battle(a, b, cfg=RuleConfig(round_limit=3), rng=ScriptRNG(seq))
+        absorbs = self._events(rep, "absorb")
+        self.assertEqual([ab["left"] for ab in absorbs], [1, 0], "角质层应恰好吸收 2 次")
+        hit_r3 = self._events(rep, "hit", side="A", round=3)
+        self.assertTrue(hit_r3 and "头" in hit_r3[0]["target"], "第 3 次攻击应真正打到头")
+
+    def test_角质层_生效期间宿主头不暴击(self):
+        a = mkp("A", heads=[("顶撞头", "头顶角质层")])   # 25 攻,10% 暴击被压成 0
+        b = mkp("B", torso="稍微长大的躯干")
+        # randoms: 先攻0.0;头目标0.9→躯干;若掷暴击骰 0.05<0.10 会暴击 → 断言未消耗该骰
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.0, 0.9, 0.05]))
+        hit = self._events(rep, "hit")[0]
+        self.assertFalse(hit["crit"])
+        self.assertEqual(hit["dmg"], 25, "角质层生效期间不掷暴击骰")
+
+    # ---- 骨盾 ----
+    def test_骨盾_格挡成功再减20(self):
+        a = mkp("A", heads=["猛头"])
+        b = mkp("B", hands=[("猛爪", "骨盾")])
+        # randoms: 先攻0.0→A;(B猛爪打A躯干无掷骰);A头目标0.9→躯干;暴击0.5;格挡0.1<0.2→触发
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.0, 0.9, 0.5, 0.1]))
+        blk = self._events(rep, "block")[0]
+        self.assertTrue(blk["bone"])
+        self.assertEqual(blk["taken"], 12, "floor(floor(20×0.8)×0.8)=12")
+
+    # ---- 死亡触发:爆裂腺体 / 肾上腺素 / 胶质瘤 / 芽孢 ----
+    def test_爆裂腺体_破坏者吃40伤(self):
+        a = mkp("A", hands=["小手手"])                   # 7 攻 65 血
+        b = mkp("B", hands=[("新手手", "爆裂腺体")])     # 25 血,4 击破;其间反击 3×5=15
+        rep = battle(a, b, cfg=RuleConfig(round_limit=4), rng=ScriptRNG([0.0] * 4))
+        glands = self._events(rep, "gland")
+        self.assertEqual(len(glands), 1)
+        self.assertEqual(glands[0]["dmg"], 40)
+        self.assertEqual(glands[0]["target_hp"], 10, "小手手 65-15 反击 = 50,吃 40 = 剩 10")
+
+    def test_爆裂腺体_级联但不无限(self):
+        a = mkp("A", hands=[("新手手", "爆裂腺体")])
+        b = mkp("B", hands=[("新手手", "爆裂腺体")])
+        rep = battle(a, b, seed=1, cfg=RuleConfig(round_limit=10))
+        # 一方手被打破 → 腺体炸死对方手 → 对方腺体无目标(破坏者已死)不再回炸
+        self.assertEqual(len(self._events(rep, "gland")), 1)
+        self.assertEqual(len(self._events(rep, "break")), 2, "两只手同一时刻同归于尽")
+
+    def test_肾上腺素_宿主腿破其他部位立回5(self):
+        a = mkp("A", legs=["踢腿"])                      # 10 攻
+        b = mkp("B", legs=[("新手腿", "肾上腺素")])      # 20 血,2 击破
+        b.torso.hp = 90
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2),
+                     rng=ScriptRNG([0.5, 0.9, 0.5, 0.9]))
+        ad = self._events(rep, "adrenaline")
+        self.assertEqual(len(ad), 1)
+        self.assertEqual(ad[0]["healed"], 5, "只剩躯干存活,+5")
+        b_torso = next(p for p in rep["final"]["B"] if "躯干" in p["name"])
+        self.assertEqual(b_torso["hp"], 95)
+
+    def test_胶质瘤_宿主手破每回合回2持续5回合(self):
+        a = mkp("A", hands=["猛爪"])
+        b = mkp("B", hands=[("新手手", "胶质瘤")])
+        b.torso.hp = 90
+        rep = battle(a, b, cfg=RuleConfig(round_limit=3), rng=ScriptRNG([0.0, 0.0, 0.0]))
+        self.assertTrue(self._events(rep, "regen_start", side="B", round=3))
+        regen = self._events(rep, "regen", side="B", round=3)
+        self.assertTrue(regen and regen[0]["heal"] == 2)
+        b_torso = next(p for p in rep["final"]["B"] if "躯干" in p["name"])
+        self.assertEqual(b_torso["hp"], 92, "第 3 回合手破,当回合末即回 2")
+
+    def test_芽孢_空2回合后长出新手(self):
+        a = mkp("A", hands=["猛爪"])                     # 10 攻
+        b = mkp("B", hands=["长有芽孢的手"])             # 30 血,3 击破(R3)
+        rep = battle(a, b, cfg=RuleConfig(round_limit=6), rng=ScriptRNG([0.0] * 8))
+        self.assertTrue(self._events(rep, "spore_set", side="B", round=3))
+        grow = self._events(rep, "spore_grow", side="B")
+        self.assertEqual([g["round"] for g in grow], [6], "R3 破 → R4/R5 空槽 → R6 长出")
+        for r in (4, 5):
+            b_atk = [e for e in rep["events"] if e["round"] == r and e.get("side") == "B"
+                     and e["type"] in ("hit", "dodge", "block", "grab")]
+            self.assertEqual(b_atk, [], f"芽孢期 R{r} 不应出手")
+            a_hits = self._events(rep, "hit", side="A", round=r)
+            self.assertTrue(all("躯干" in h["target"] for h in a_hits), "芽孢不可被攻击,A 应回退打躯干")
+        hit6 = [e for e in rep["events"] if e["round"] == 6 and e.get("side") == "B" and e["type"] == "hit"]
+        self.assertTrue(hit6 and hit6[0]["dmg"] == 8, "芽孢长出来的手 8 攻")
+
+    # ---- 装配校验 ----
+    def test_插件校验_位置与衍生件(self):
+        from .builds import build
+        m = build("插件装", "新手躯干", hands=[("猛爪", "骨盾")], torso_plugin="尖刺皮肤")
+        self.assertEqual(m.price_total(), 630, "350+30(尖刺皮肤)+200+50(骨盾)")
+        with self.assertRaises(AssertionError):          # 骨盾只能装手
+            build("错位", "新手躯干", legs=[("新手腿", "骨盾")])
+        with self.assertRaises(AssertionError):          # 碎骨锥只能装腿
+            build("错位2", "新手躯干", hands=[("猛爪", "碎骨锥")])
+        with self.assertRaises(AssertionError):          # 衍生件不可直接装
+            build("偷芽孢", "新手躯干", hands=["芽孢长出来的手"])
+        build("腺体腿", "新手躯干", legs=[("新手腿", "爆裂腺体")])   # 手/腿双位插件合法
+
+    def test_机制流_跑通且纯函数(self):
+        from .builds import roster
+        r = roster()
+        rep1 = battle(r["机制流"], r["均衡流"], seed=42)
+        rep2 = battle(r["机制流"], r["均衡流"], seed=42)
+        self.assertIn(rep1["winner"], ("A", "B", "draw"))
+        self.assertEqual(rep1["winner"], rep2["winner"])
+        self.assertEqual(len(rep1["events"]), len(rep2["events"]))
 
 
 if __name__ == "__main__":

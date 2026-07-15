@@ -152,7 +152,7 @@
 <div class="wrap">
   <header>
     <h1>🦖 手搓大怪兽</h1>
-    <span style="color:var(--dim);font-size:13px">Demo v0.4 · 打击感升级</span>
+    <span style="color:var(--dim);font-size:13px">Demo v0.5 · 机制零件与插件</span>
     <a href="../">← 设计 wiki</a>
   </header>
 
@@ -197,7 +197,7 @@
       <div class="group"><div class="gtitle">手 <span id="limbCap"></span></div><div class="chips" id="handRow"></div></div>
       <div class="group"><div class="gtitle">腿</div><div class="chips" id="legRow"></div></div>
       <div class="group"><div class="gtitle">尾巴(插件:独立位不占四肢槽,限 1,不可被攻击)</div><div class="chips" id="tailRow"></div></div>
-      <div class="group"><div class="gtitle">扩展插槽 / 身体插件</div><div class="chips" id="slotRow"></div></div>
+      <div class="group"><div class="gtitle">扩展插槽(身体插件在「躯干」栏挂载)</div><div class="chips" id="slotRow"></div></div>
     </div>
 
     <button class="btn primary" id="goFight" style="width:100%;padding:14px;font-size:17px">⚔️ 去战斗</button>
@@ -247,15 +247,32 @@ const $ = (id) => document.getElementById(id);
 
 // ===== 存档(localStorage)=====
 const SAVE_KEY = "monster-demo-v1";
-// 旧存档迁移:改名零件映射 + 未知零件过滤(零件表更新后旧配装不至于把页面搞崩)
+// 配装项:字符串 "猛爪" 或对象 {name:"猛爪", plugin:"骨盾"}(与 engine.js makeMonster 同构)
+const entryName = (e) => (typeof e === "string" ? e : e.name);
+const entryPlugin = (e) => (typeof e === "string" ? "" : e.plugin || "");
+const withPlugin = (e, plug) => (plug ? { name: entryName(e), plugin: plug } : entryName(e));
+// 旧存档迁移:改名零件映射 + 未知零件过滤 + 能量核心从 slots 迁到躯干插件位
 const RENAMED = { "粗腿": "灵活的腿" };
 function sanitizeBuild(b) {
   if (!b || !b.torso) return null;
   const fix = (n) => RENAMED[n] || n;
   b.torso = fix(b.torso);
   if (!E.CATALOG[b.torso]) return null;
+  b.torsoPlugin = b.torsoPlugin && E.PLUGINS[b.torsoPlugin] ? b.torsoPlugin : "";
+  // 迁移:普通能量核心旧版在 slots(已不在零件目录,要在未知件过滤前认出来),现为躯干"身体"位插件
+  if ((b.slots || []).some((e) => entryName(e) === "普通能量核心") && !b.torsoPlugin)
+    b.torsoPlugin = "普通能量核心";
   for (const k of ["heads", "hands", "legs", "tails", "slots"])
-    b[k] = (b[k] || []).map(fix).filter((n) => E.CATALOG[n]);
+    b[k] = (b[k] || [])
+      .map((e) => {
+        const n = fix(entryName(e));
+        const plug = entryPlugin(e);
+        if (!E.CATALOG[n] || E.CATALOG[n].derived) return null;
+        if (plug && (!E.PLUGINS[plug] || !E.PLUGINS[plug].pos.includes(E.CATALOG[n].kind)))
+          return n;   // 插件失效/位置不合法 → 只留部件
+        return plug ? { name: n, plugin: plug } : n;
+      })
+      .filter(Boolean);
   return b;
 }
 function loadSave() {
@@ -281,15 +298,30 @@ function unlockedSet() {
 }
 
 // ===== 玩家配装状态(默认 = PVE 起始装)=====
-const starterBuild = () => ({ torso: E.STARTER_BUILD.torso, heads: [...E.STARTER_BUILD.heads],
+const starterBuild = () => ({ torso: E.STARTER_BUILD.torso, torsoPlugin: "", heads: [...E.STARTER_BUILD.heads],
   hands: [...E.STARTER_BUILD.hands], legs: [...E.STARTER_BUILD.legs], tails: [], slots: [] });
 let build = save.build || starterBuild();
 
 const CAT_BY_KIND = {};
 for (const [n, s] of Object.entries(E.CATALOG)) {
-  if (s.pve) continue;   // PVE 专属敌方部件不入玩家目录
+  if (s.pve || s.derived) continue;   // PVE 专属 / 衍生部件(芽孢长出来的手)不入玩家目录
   (CAT_BY_KIND[s.kind] = CAT_BY_KIND[s.kind] || []).push(n);
 }
+// 插件说明(装配 UI 用;规则实现见 engine.js)
+const PLUG_DESC = {
+  "头顶角质层": "替这只头挡下 2 次攻击(期间该头不暴击)",
+  "头顶尖刺": "这只头暴击率 +5%",
+  "骨盾": "这只手格挡成功时,承受伤害再 -20%",
+  "胶质瘤": "这只手被破后,全队每回合回 2 血,持续 5 回合",
+  "肾上腺素": "这条腿被破后,全队立即回 5 血",
+  "爆裂腺体": "这个部件被破后,对破坏者造成 40 伤害",
+  "耐火皮肤": "躯干受到的火焰伤害 -50%,免疫灼烧",
+  "撕裂爪": "这只手 -2 攻,命中后目标每回合掉 2 血 ×5 回合",
+  "碎骨锥": "这条腿命中后,50% 使目标下回合不能行动",
+  "尖刺皮肤": "躯干受伤时,反挂撕裂:攻击者每回合掉 2 血 ×2 回合",
+  "普通能量核心": "供能 +20",
+};
+const PLUG_KIND_OF = { torso: "torso", heads: "head", hands: "hand", legs: "leg" };
 
 function toast(msg) {
   const t = $("toastBox");
@@ -299,11 +331,13 @@ function toast(msg) {
   toast._tm = setTimeout(() => { t.style.display = "none"; }, 3500);
 }
 
-// 配装里未解锁的零件(载入预设可能带进来)
+// 配装里未解锁的零件/插件(载入预设可能带进来)
 function lockedInBuild() {
   const u = unlockedSet();
-  const names = [build.torso, ...build.heads, ...build.hands, ...build.legs, ...build.tails, ...build.slots];
-  return [...new Set(names.filter((n) => !u.has(n)))];
+  const entries = [build.torso, ...build.heads, ...build.hands, ...build.legs, ...build.tails, ...build.slots];
+  const names = entries.map(entryName).concat(entries.map(entryPlugin));
+  if (build.torsoPlugin) names.push(build.torsoPlugin);
+  return [...new Set(names.filter((n) => n && !u.has(n)))];
 }
 
 function statStr(n) {
@@ -535,8 +569,8 @@ function renderBuild() {
   const m = monster();
   const errs = E.validate(m);
   const cmd = E.commandSupply(m), limbs = m.hands.length + m.legs.length;
-  const headSlots = 1 + build.slots.filter((s) => s === "头部插槽").length;
-  const limbSlots = 4 + build.slots.filter((s) => s === "四肢插槽").length;
+  const headSlots = 1 + build.slots.filter((s) => entryName(s) === "头部插槽").length;
+  const limbSlots = 4 + build.slots.filter((s) => entryName(s) === "四肢插槽").length;
   const nLimbSlotUsed = build.hands.length + build.legs.length;   // 尾巴独立位
   const eu = E.energyUsed(m), sup = E.supplyTotal(m);
 
@@ -563,10 +597,18 @@ function renderBuild() {
   $("headCap").textContent = `(${build.heads.length}/${headSlots})`;
   $("limbCap").textContent = `(手+腿 ${nLimbSlotUsed}/${limbSlots})`;
 
-  $("torsoRow").innerHTML = `<span class="chip" onclick="openSheet('torso')"><b>${build.torso}</b><span class="sub">${statStr(build.torso)}</span></span>`;
+  $("torsoRow").innerHTML =
+    `<span class="chip" onclick="openSheet('torso')"><b>${build.torso}</b><span class="sub">${statStr(build.torso)}</span></span>` +
+    `<span class="chip" onclick="openPlugSheet('torso',-1)">🔌 ${build.torsoPlugin || "身体插件:无"}${build.torsoPlugin ? ` <span class="sub">${PLUG_DESC[build.torsoPlugin]}</span>` : ""}</span>`;
   for (const [kind, key, rowId] of [["head","heads","headRow"],["hand","hands","handRow"],["leg","legs","legRow"],["tail","tails","tailRow"],["slot","slots","slotRow"]]) {
-    const row = build[key].map((n, i) =>
-      `<span class="chip" onclick="removePart('${key}',${i})">${n} <span class="sub">${E.CATALOG[n].atk ? "攻" + E.CATALOG[n].atk : ""}${E.CATALOG[n].hp ? " 血" + E.CATALOG[n].hp : ""}</span><span class="x">×</span></span>`).join("");
+    const pluggable = !!PLUG_KIND_OF[key] && key !== "torso";
+    const row = build[key].map((e, i) => {
+      const n = entryName(e), plug = entryPlugin(e);
+      const body = pluggable
+        ? `<span onclick="openPlugSheet('${key}',${i})">${n}${plug ? ` <span class="sub">🔌${plug}</span>` : " 🔌"}</span>`
+        : `<span onclick="removePart('${key}',${i})">${n}</span>`;
+      return `<span class="chip">${body} <span class="sub">${E.CATALOG[n].atk ? "攻" + E.CATALOG[n].atk : ""}${E.CATALOG[n].hp ? " 血" + E.CATALOG[n].hp : ""}</span><span class="x" onclick="removePart('${key}',${i})">×</span></span>`;
+    }).join("");
     $(rowId).innerHTML = row + `<span class="chip add" onclick="openSheet('${kind}')">+ 添加</span>`;
   }
 }
@@ -592,6 +634,33 @@ window.pick = (kind, n, locked) => {
   saveBuild();
   renderBuild();
 };
+
+// ===== 插件挂载(Q17e:每部件限 1,装配期自由拆装)=====
+window.openPlugSheet = (key, i) => {
+  const kind = PLUG_KIND_OF[key];
+  const cur = key === "torso" ? build.torsoPlugin : entryPlugin(build[key][i]);
+  const host = key === "torso" ? build.torso : entryName(build[key][i]);
+  const u = unlockedSet();
+  const opts = Object.entries(E.PLUGINS).filter(([, s]) => s.pos.includes(kind));
+  $("sheetTitle").textContent = `「${host}」的插件(限 1 个,点击挂载)`;
+  $("sheetOpts").innerHTML =
+    `<div class="opt" onclick="pickPlug('${key}',${i},'',false)"><span class="nm">🚫 不装插件</span><span class="st">${cur ? "点击卸下当前插件" : "当前"}</span></div>` +
+    opts.map(([n, s]) => {
+      const locked = !u.has(n);
+      return `<div class="opt ${locked ? "lock" : ""}" onclick="pickPlug('${key}',${i},'${n}',${locked})">
+        <span class="nm">${locked ? "🔒 " : ""}${cur === n ? "✅ " : ""}${n}</span>
+        <span class="st">${PLUG_DESC[n]} · 💰${s.price}${locked ? " · 战役解锁" : ""}</span></div>`;
+    }).join("");
+  $("sheet").classList.add("on");
+};
+window.pickPlug = (key, i, plug, locked) => {
+  if (locked) { toast("🔒 这个插件还没解锁——打赢战役关卡可以解锁"); return; }
+  if (key === "torso") build.torsoPlugin = plug;
+  else build[key][i] = withPlugin(build[key][i], plug);
+  $("sheet").classList.remove("on");
+  saveBuild();
+  renderBuild();
+};
 $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").classList.remove("on"); });
 
 // 预设
@@ -599,8 +668,9 @@ const presetSel = $("preset");
 for (const n of Object.keys(E.ARCHETYPES)) presetSel.add(new Option(n, n));
 $("loadPreset").onclick = () => {
   const p = E.ARCHETYPES[presetSel.value];
-  build = { torso: p.torso, heads: [...(p.heads || [])], hands: [...(p.hands || [])],
-            legs: [...(p.legs || [])], tails: [...(p.tails || [])], slots: [...(p.slots || [])] };
+  build = JSON.parse(JSON.stringify({ torso: p.torso, torsoPlugin: p.torsoPlugin || "",
+            heads: p.heads || [], hands: p.hands || [],
+            legs: p.legs || [], tails: p.tails || [], slots: p.slots || [] }));
   saveBuild();
   renderBuild();
 };
@@ -697,8 +767,9 @@ $("speedCtl").querySelectorAll("button").forEach((b) => {
 function partRow(p, id) {
   const noHp = p.maxHp <= 0;   // 装饰件血量 0:纯摆设,不显示血条
   const w = noHp ? 0 : 100;
+  const plug = p.plugin ? ` <span style="color:var(--acc);font-size:10px">🔌${p.plugin}</span>` : "";
   return `<div class="prow ${p.kind === "torso" ? "torso" : ""}" id="${id}">
-    <div class="nm"><b>${p.kind === "torso" ? p.name : E.label(p)}</b><span>${noHp ? "摆设" : "攻" + p.atk}</span></div>
+    <div class="nm"><b class="pname">${p.kind === "torso" ? p.name : E.label(p)}</b>${plug}<span>${noHp ? "摆设" : "攻" + p.atk}</span></div>
     <div class="bar"><i class="ghost" style="width:${w}%"></i><i class="fill" style="width:${w}%"></i></div>
     <div class="nm"><span class="hp">${noHp ? "—" : p.hp + "/" + p.maxHp}</span></div></div>`;
 }
@@ -747,10 +818,26 @@ function evLine(ev) {
   if (t === "no_command") return [`🚫 ${ev.side === "A" ? "我方" : "敌方"} <b>${ev.part}</b> 指挥点不足,站着不动`, ""];
   if (t === "dodge") return [`💨 <b>${ev.attacker}</b> 的攻击被${ev.side === "A" ? "敌方" : "我方"}闪开了`, ""];
   if (t === "block") return [`🛡 <b>${ev.attacker}</b> → ${ev.target}:${ev.crit ? "💥暴击!" : ""}被格挡!${ev.dmg}→${ev.taken} 伤转给 <b>${ev.blocker}</b>`, ""];
-  if (t === "hit") return [`${ev.side === "A" ? "🗡" : "🩸"} <b>${ev.attacker}</b> → <b>${ev.target}</b>:${ev.crit ? "💥暴击!" : ""}-${ev.dmg}`, ev.crit ? "brk" : ""];
+  if (t === "hit") return [`${ev.side === "A" ? "🗡" : "🩸"} <b>${ev.attacker}</b> → <b>${ev.target}</b>:${ev.crit ? "💥暴击!" : ""}${ev.extra ? "🔥波及!" : ""}-${ev.dmg}${ev.fireproof ? "(耐火减半)" : ""}`, ev.crit ? "brk" : ""];
   if (t === "break") return [`💀 ${ev.side === "A" ? "我方" : "敌方"} <b>${ev.part}</b> 被击破!`, "brk"];
   if (t === "stun_set") return [`⚡ ${ev.side === "A" ? "我方" : "敌方"}头部被毁 → 下回合全队瘫痪`, "brk"];
   if (t === "timeout") return [`⏱ 打满回合上限,按躯干血量比判定`, "rhead"];
+  // —— 机制事件(Q17)——
+  const my = (s) => (s === "A" ? "我方" : "敌方");
+  if (t === "grab") return [`🫳 <b>${ev.attacker}</b> 抓住了${my(other(ev.side))}!接下来 ${ev.rounds} 回合闪避失效`, "brk"];
+  if (t === "absorb") return [`🪖 <b>${ev.target}</b> 的角质层替头挡下了 <b>${ev.attacker}</b> 的攻击(还能挡 ${ev.left} 次)`, ""];
+  if (t === "status") return [ev.status === "burn"
+    ? [`🔥 ${my(ev.side)} <b>${ev.part}</b> 被点燃(每回合 -2,持续 ${ev.rounds} 回合)`, ""]
+    : [`🩸 ${my(ev.side)} <b>${ev.part}</b> 被撕裂(每回合 -2,持续 ${ev.rounds} 回合)`, ""]][0];
+  if (t === "dot_tick") return [`${ev.status === "burn" ? "🔥" : "🩸"} ${my(ev.side)} <b>${ev.part}</b> ${ev.status === "burn" ? "灼烧" : "撕裂"} -${ev.dmg}`, ""];
+  if (t === "part_stun_set") return [`🦴 <b>${ev.by}</b> 的碎骨锥命中 → ${my(ev.side)} <b>${ev.part}</b> 下回合不能行动`, ""];
+  if (t === "part_stunned") return [`🦴 ${my(ev.side)} <b>${ev.part}</b> 失衡,本回合不能行动`, ""];
+  if (t === "spore_set") return [`🌱 ${my(ev.side)} <b>${ev.part}</b> 碎裂,留下一枚芽孢(2 回合后重生)`, ""];
+  if (t === "spore_grow") return [`🌱 ${my(ev.side)}的芽孢破土——<b>${ev.part}</b> 长了出来!`, "win"];
+  if (t === "regen_start") return [`💚 ${my(ev.side)} <b>${ev.part}</b> 破裂,胶质涌出:全队每回合回 ${ev.heal} 血,持续 ${ev.rounds} 回合`, ""];
+  if (t === "regen") return [`💚 ${my(ev.side)}全队回复 ${ev.heal} 血`, ""];
+  if (t === "adrenaline") return [`💉 ${my(ev.side)} <b>${ev.part}</b> 破裂,肾上腺素迸发:全队立即回 5 血`, ""];
+  if (t === "gland") return [`💥 ${my(ev.side)} <b>${ev.part}</b> 的爆裂腺体炸裂!<b>${ev.target}</b> -${ev.dmg}`, "brk"];
   return null;
 }
 // ===== 回放调度:按事件类型 × 速度挡分配 前摇/顿帧/屏震/音效/飘字(速度矩阵见 review 计划)=====
@@ -763,7 +850,9 @@ function dmgTier(ev) {   // 伤害分档:0 小伤 / 1 普通 / 2 重击 / 3 暴�
 }
 // 事件节拍(× speedMs):无信息事件快速略过,重事件多停——节奏压缩比特效更救观感
 const BEAT = { round_start: .55, command: .25, no_command: .3, stun_set: .45, stunned: .8,
-               dodge: .85, block: 1, hit: 1, break: 1.35, timeout: 1 };
+               dodge: .85, block: 1, hit: 1, break: 1.35, timeout: 1,
+               grab: 1, absorb: .8, status: .35, dot_tick: .35, part_stun_set: .5, part_stunned: .4,
+               spore_set: .8, spore_grow: 1, regen_start: .6, regen: .4, adrenaline: .6, gland: 1.2 };
 
 function playEv(ev, ft) {
   const t = ev.type;
@@ -833,12 +922,94 @@ function playEv(ev, ft) {
     dollFx(ev.side, ev.part, "🚫", "#9b93b8", "", false);
     return 0;
   }
+  // —— 机制事件(Q17)——
+  if (t === "grab") {
+    if (ft <= 1) {
+      dollAnim(ev.side, "atk" + dir, ft === 0 ? 240 : 150);
+      dollAnim(other(ev.side), "squashK", 260);
+    }
+    AudioFX.play("stun", 0);
+    dollFx(other(ev.side), view[other(ev.side)]._torso, "🫳被抓住!", "#fbbf24", "d1", false);
+    return 0;
+  }
+  if (t === "absorb") {
+    AudioFX.play("block", 0);
+    if (ft <= 1) partAnim(other(ev.side), ev.target, "squashK", 200);
+    dollFx(other(ev.side), ev.target, "🪖" + ev.left, "#8bd5ff", "", false);
+    return 0;
+  }
+  if (t === "status") {
+    dollFx(ev.side, ev.part, ev.status === "burn" ? "🔥" : "🩸",
+           ev.status === "burn" ? "#fb923c" : "#f87171", "", false);
+    return 0;
+  }
+  if (t === "dot_tick") {
+    setHp(ev.side, ev.part, ev.partHp);
+    dollFx(ev.side, ev.part, (ev.status === "burn" ? "🔥" : "🩸") + "-" + ev.dmg,
+           ev.status === "burn" ? "#fb923c" : "#f87171", "", false);
+    return 0;
+  }
+  if (t === "part_stun_set" || t === "part_stunned") {
+    if (t === "part_stunned" && ft <= 1) partAnim(ev.side, ev.part, "wobbleK", 320);
+    dollFx(ev.side, ev.part, "🦴", "#fbbf24", "", false);
+    return 0;
+  }
+  if (t === "spore_set") {
+    dollFx(ev.side, ev.part, "🌱", "#4ade80", "", false);
+    return 0;
+  }
+  if (t === "spore_grow") {
+    sporeGrow(ev.side, ev.part, ev.hp);
+    AudioFX.play("win", 0);
+    dollFx(ev.side, ev.part, "🌱重生!", "#4ade80", "d1", false);
+    return 0;
+  }
+  if (t === "regen" || t === "regen_start" || t === "adrenaline") {
+    if (ev.parts) for (const h of ev.parts) setHp(ev.side, h.part, h.hp);
+    dollFx(ev.side, view[ev.side]._torso, t === "adrenaline" ? "💉+5" : "💚+" + (ev.heal || 2),
+           "#4ade80", "", false);
+    return 0;
+  }
+  if (t === "gland") {
+    AudioFX.play("break", 0);
+    setHp(other(ev.side), ev.target, ev.targetHp);
+    dollFx(other(ev.side), ev.target, "💥-" + ev.dmg, "#fbbf24", "d2");
+    if (ft <= 1) { impactAt(other(ev.side), ev.target, true); shake(ft === 0 ? 2 : 1); }
+    return ft === 0 ? 55 : 0;
+  }
   return 0;
+}
+// 芽孢重生:battle 里部件原地变身「芽孢长出来的手」,把面板/纸偶的旧键改绑到新名字
+function sporeGrow(sideKey, newLabel, hp) {
+  const oldLabel = newLabel.replace("芽孢长出来的手", "长有芽孢的手");
+  const v = view[sideKey][oldLabel];
+  if (!v) return;
+  delete view[sideKey][oldLabel];
+  v.maxHp = hp;
+  view[sideKey][newLabel] = v;
+  const el = document.getElementById(v.id);
+  if (el) {
+    el.classList.remove("dead");
+    el.querySelector(".pname").textContent = newLabel;
+    el.querySelector(".bar .fill").style.width = "100%";
+    el.querySelector(".bar .ghost").style.width = "100%";
+    el.querySelector(".hp").textContent = `${hp}/${hp}`;
+  }
+  const d = dollEl(sideKey, oldLabel);
+  if (d) {
+    d.setAttribute("data-dk", `${sideKey}|${newLabel}`);
+    d.classList.remove("dead", "hitfx");
+    d.style.background = partColor({ name: "芽孢长出来的手", kind: "hand" });
+  }
 }
 function applyInstant(ev) {   // 瞬间挡:只应用状态,零特效
   if (ev.type === "hit") setHp(other(ev.side), ev.target, ev.targetHp);
   else if (ev.type === "block") setHp(other(ev.side), ev.blocker, ev.blockerHp);
   else if (ev.type === "break") dollKill(ev.side, ev.part);
+  else if (ev.type === "dot_tick") setHp(ev.side, ev.part, ev.partHp);
+  else if (ev.type === "gland") setHp(other(ev.side), ev.target, ev.targetHp);
+  else if (ev.type === "spore_grow") sporeGrow(ev.side, ev.part, ev.hp);
+  else if (ev.parts) for (const h of ev.parts) setHp(ev.side, h.part, h.hp);
 }
 
 // ===== 战役教学提示(Akun 2026-07-15 教学点设计:按战斗事件触发)=====
@@ -928,7 +1099,7 @@ function finish(rep) {
       persist();
       toast(`🎁 首次通关!+${curCamp.reward} 生物质,解锁:${curCamp.unlocks.join("、")}`);
       logLine(`🎁 获得 ${curCamp.reward} 生物质;解锁零件:${curCamp.unlocks.join("、")}——去「装配」页升级!`, "win");
-      if (curCamp.lv === 3) logLine("(插件「头顶尖刺」「胶质瘤」也已解锁,机制开发中,下版本上架)", "");
+      if (curCamp.lv === 3) logLine("💡 新解锁的「头顶尖刺」「胶质瘤」是插件——在「装配」页点部件上的 🔌 挂载。", "");
     } else {
       logLine("(已通关过,本次无奖励)", "");
     }
