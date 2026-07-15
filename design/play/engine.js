@@ -7,14 +7,14 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  // ===== 零件目录(与 sim/parts.py CATALOG 同步)=====
+  // ===== 零件目录(与 sim/parts.py CATALOG 同步;数值:Akun 2026-07-15 零件表)=====
   const CATALOG = {
-    // 头:command=指挥点供给(Q12 方案A);crit=暴击率(本体,Akun 2026-07-07)
+    // 头:command=指挥点供给(Q12 方案A);crit=暴击率(本体)
     "新手头":   { kind: "head", atk: 10, hp: 50,  energy: 10, command: 2, crit: 0,    price: 200 },
     "猛头":     { kind: "head", atk: 20, hp: 100, energy: 20, command: 2, crit: 0.08, price: 400 },
-    "顶撞头":   { kind: "head", atk: 25, hp: 75,  energy: 20, command: 1, crit: 0.10, price: 400 },
-    "肿头":     { kind: "head", atk: 15, hp: 125, energy: 20, command: 3, crit: 0.08, price: 400 },
-    // 手
+    "顶撞头":   { kind: "head", atk: 25, hp: 75,  energy: 20, command: 2, crit: 0.10, price: 400 },
+    "肿头":     { kind: "head", atk: 15, hp: 125, energy: 20, command: 3, crit: 0.06, price: 400 },
+    // 手(喷火头/抓握手/芽孢手等机制件待引擎支持后加入)
     "新手手":   { kind: "hand", atk: 5,  hp: 25,  energy: 5,  price: 100 },
     "猛爪":     { kind: "hand", atk: 10, hp: 50,  energy: 10, price: 200 },
     "强力爪":   { kind: "hand", atk: 13, hp: 35,  energy: 10, price: 200 },
@@ -23,27 +23,28 @@
     "新手腿":   { kind: "leg", atk: 3,  hp: 20, energy: 5,  initiative: 1, dodge: 0.05, price: 100 },
     "猛腿":     { kind: "leg", atk: 6,  hp: 50, energy: 10, initiative: 2, dodge: 0.05, price: 200 },
     "鞭腿":     { kind: "leg", atk: 8,  hp: 40, energy: 10, initiative: 2, dodge: 0.05, price: 200 },
-    "粗腿":     { kind: "leg", atk: 4,  hp: 60, energy: 10, initiative: 2, dodge: 0.07, price: 200 },
+    "灵活的腿": { kind: "leg", atk: 4,  hp: 60, energy: 10, initiative: 2, dodge: 0.07, price: 200 },
     "踢腿":     { kind: "leg", atk: 10, hp: 50, energy: 10, initiative: 0, dodge: 0.0,  price: 200 },
-    // 躯干:command=基础指挥点
-    "新手躯干":       { kind: "torso", atk: 0, hp: 100, supply: 30, command: 3, price: 500 },
-    "稍微长大的躯干": { kind: "torso", atk: 0, hp: 200, supply: 40, command: 4, price: 800 },
-    "有些肌肉的躯干": { kind: "torso", atk: 0, hp: 150, supply: 50, command: 3, price: 800 },
-    // 插件(E8:不可被攻击)
+    // 躯干:command=基础指挥点(Akun 2026-07-15 拍板 2/3/3;价格按新公式 1供能=5价)
+    "新手躯干":       { kind: "torso", atk: 0, hp: 100, supply: 30, command: 2, price: 350 },
+    "稍微长大的躯干": { kind: "torso", atk: 0, hp: 200, supply: 60, command: 3, price: 700 },
+    "有些肌肉的躯干": { kind: "torso", atk: 0, hp: 150, supply: 80, command: 3, price: 700 },
+    // 插件(E8:不可被攻击;尾巴=独立位不占四肢槽)
     "新手尾巴": { kind: "tail", atk: 0, hp: 0, initiative: 1, price: 20 },
     "猛尾":     { kind: "tail", atk: 0, hp: 0, initiative: 2, price: 40 },
     "四肢插槽": { kind: "slot", atk: 0, hp: 0, price: 30 },
     "头部插槽": { kind: "slot", atk: 0, hp: 0, price: 50 },
-    // 装饰件(PVE 起始装,Q13;数值待 Akun 核)
-    "装饰手":   { kind: "hand", atk: 0, hp: 10, energy: 0, price: 0 },
-    "装饰腿":   { kind: "leg",  atk: 0, hp: 10, energy: 0, price: 0 },
+    "普通能量核心": { kind: "slot", atk: 0, hp: 0, supply: 20, price: 100 },
+    // 装饰件(PVE 起始装;Akun 2026-07-15 血量 0:纯摆设不可当肉墙)
+    "装饰手":   { kind: "hand", atk: 0, hp: 0, energy: 0, price: 0 },
+    "装饰腿":   { kind: "leg",  atk: 0, hp: 0, energy: 0, price: 0 },
     // PVE 专属敌方部件(不入玩家目录)
     "鹿躯干":     { kind: "torso", atk: 0, hp: 50,  supply: 99, command: 99, price: 0, pve: true },
     "猛犸象头":   { kind: "head",  atk: 2, hp: 75,  hits: 2, price: 0, pve: true },
     "猛犸象躯干": { kind: "torso", atk: 0, hp: 200, supply: 99, command: 99, price: 0, pve: true },
-    "恐兽头":     { kind: "head",  atk: 5, hp: 100, price: 0, pve: true },
-    "恐兽躯干":   { kind: "torso", atk: 0, hp: 100, supply: 99, command: 99, price: 0, pve: true },
-    "恐兽爪":     { kind: "hand",  atk: 5, hp: 25,  price: 0, pve: true },
+    "剑齿虎头":   { kind: "head",  atk: 5, hp: 100, price: 0, pve: true },
+    "剑齿虎躯干": { kind: "torso", atk: 0, hp: 100, supply: 99, command: 99, price: 0, pve: true },
+    "剑齿虎爪":   { kind: "hand",  atk: 2, hp: 50,  price: 0, pve: true },
   };
   const KIND_CN = { head: "头", hand: "手", leg: "腿", torso: "躯干", tail: "尾" };
 
@@ -81,6 +82,8 @@
     m.torso.command + m.heads.filter(alive).reduce((s, h) => s + h.command, 0);
   const energyUsed = (m) =>
     [...m.heads, ...m.hands, ...m.legs, ...m.tails].reduce((s, p) => s + p.energy, 0);
+  const supplyTotal = (m) =>
+    m.torso.supply + m.slots.reduce((s, p) => s + (p.supply || 0), 0);   // 躯干 + 能量核心
   const priceTotal = (m) =>
     [...allParts(m), ...m.tails, ...m.slots].reduce((s, p) => s + p.price, 0);
 
@@ -94,13 +97,16 @@
         if (p.kind !== want) errs.push(`「${p.name}」(${KIND_CN[p.kind] || p.kind})装错槽位`);
         if (p.pve) errs.push(`「${p.name}」是 PVE 专属敌方部件,玩家不可用`);
       }
-    const used = energyUsed(m), sup = m.torso.supply;
+    const used = energyUsed(m), sup = supplyTotal(m);
     if (used > sup) errs.push(`能量超限:需求 ${used} > 供能 ${sup}`);
     const headSlots = 1 + m.slots.filter((s) => s.name === "头部插槽").length;
     const limbSlots = 4 + m.slots.filter((s) => s.name === "四肢插槽").length;
     if (m.heads.length > headSlots) errs.push(`头槽超限:${m.heads.length} > ${headSlots}`);
-    const nLimbs = m.hands.length + m.legs.length + m.tails.length;
-    if (nLimbs > limbSlots) errs.push(`四肢槽超限(手+腿+尾):${nLimbs} > ${limbSlots}`);
+    const nLimbs = m.hands.length + m.legs.length;   // 尾巴独立位(Akun 2026-07-15)
+    if (nLimbs > limbSlots) errs.push(`四肢槽超限(手+腿):${nLimbs} > ${limbSlots}`);
+    if (m.tails.length > 1) errs.push(`尾巴独立位暂限 1 条(上限待定)`);
+    if (m.slots.filter((s) => s.name === "普通能量核心").length > 1)
+      errs.push(`能量核心限 1 个(躯干只有一个身体插件位)`);
     return errs;
   }
 
@@ -258,35 +264,34 @@
   // ===== 预设流派(与 sim/builds.py 同步)=====
   const ARCHETYPES = {
     "均衡流": { torso: "有些肌肉的躯干", heads: ["新手头"], hands: ["猛爪", "强力爪"],
-               legs: ["猛腿", "新手腿"], tails: ["猛尾"], slots: ["四肢插槽"] },
+               legs: ["猛腿", "新手腿"], tails: ["猛尾"] },
     "多头流": { torso: "有些肌肉的躯干", heads: ["猛头", "顶撞头", "新手头"], slots: ["头部插槽", "头部插槽"] },
-    "无头流": { torso: "有些肌肉的躯干", hands: ["猛爪", "强力爪", "小手手"], legs: ["猛腿", "粗腿"], slots: ["四肢插槽"] },
+    "无头流": { torso: "有些肌肉的躯干", hands: ["猛爪", "强力爪", "小手手"], legs: ["猛腿", "灵活的腿"], slots: ["四肢插槽"] },
     "踢腿流": { torso: "有些肌肉的躯干", legs: ["踢腿", "踢腿", "踢腿", "踢腿", "踢腿"], slots: ["四肢插槽"] },
     "耗材手流": { torso: "有些肌肉的躯干", heads: ["猛头"], hands: ["强力爪", "强力爪", "新手手"], legs: ["新手腿"] },
-    "肉盾流": { torso: "稍微长大的躯干", heads: ["肿头"], hands: ["小手手"], legs: ["粗腿"] },
+    "肉盾流": { torso: "稍微长大的躯干", heads: ["肿头"], hands: ["小手手"], legs: ["灵活的腿"] },
     "带头踢腿流": { torso: "有些肌肉的躯干", heads: ["新手头"], legs: ["踢腿", "踢腿", "踢腿", "踢腿"] },
   };
 
-  // ===== PVE 战役(Q13,Akun 2026-07-07;奖励/解锁数值见 Q14 待核)=====
+  // ===== PVE 战役(Akun 2026-07-15 正式版:关卡名/剧情/奖励/解锁树均为他拍板)=====
   const STARTER_BUILD = { torso: "新手躯干", heads: ["新手头"], hands: ["装饰手"], legs: ["装饰腿"] };
   const STARTER_UNLOCKED = ["新手躯干", "新手头", "装饰手", "装饰腿"];
-  const STARTER_BUDGET = 700;
+  const STARTER_BUDGET = 550;   // = 起始装价值(新手躯干350 + 新手头200)
   const CAMPAIGN = [
-    { lv: 1, name: "老迈的鹿", reward: 200, unlocks: ["新手手", "新手腿", "新手尾巴"],
+    { lv: 1, title: "生物质", name: "老迈的鹿", reward: 200, unlocks: ["新手手"],
       enemy: { torso: "鹿躯干" },
       story: "你从朦胧中醒来,漫步在一片荒凉的土地上,只感到一阵饥饿袭来……\n那是什么?一个四足行走的动物?\n不,你只觉得那是一团生物质……" },
-    { lv: 2, name: "猛犸象", reward: 300, unlocks: ["猛头", "猛爪", "猛腿"],
+    { lv: 2, title: "上手", name: "猛犸象", reward: 250, unlocks: ["新手腿", "新手尾巴"],
       enemy: { torso: "猛犸象躯干", heads: ["猛犸象头"] },
-      story: "吞下鹿之后,饥饿并未平息。\n雪原尽头,一头披着长毛的庞然大物缓缓转身——\n它的头颅能连续冲撞两次(双击),而它的躯体厚得像一堵墙。" },
-    { lv: 3, name: "笨拙的恐兽", reward: 400,
-      unlocks: ["顶撞头", "肿头", "强力爪", "小手手", "鞭腿", "粗腿", "踢腿",
-                "稍微长大的躯干", "有些肌肉的躯干", "猛尾", "四肢插槽", "头部插槽"],
-      enemy: { torso: "恐兽躯干", heads: ["恐兽头"], hands: ["恐兽爪", "恐兽爪"] },
-      story: "你的身体在膨胀,渴望更多的生物质。\n沼泽深处,一只笨拙的恐兽用双爪拍打着泥水。\n这次,它会还手——不升级装备,你赢不了它。" },
+      story: "不错的一餐,你感到自己强壮了一些,是时候巡视一下这片地方了……\n远处有一个什么动物?他正恶狠狠地盯着你,他似乎对你的捕猎行为不太满意。\n一个猛犸象!" },
+    { lv: 3, title: "先攻与闪避", name: "剑齿虎", reward: 1000,
+      unlocks: ["头部插槽", "四肢插槽", "普通能量核心"],   // Akun 还解锁头顶尖刺/胶质瘤(插件机制开发中,下版本上架)
+      enemy: { torso: "剑齿虎躯干", heads: ["剑齿虎头"], hands: ["剑齿虎爪", "剑齿虎爪"] },
+      story: "你慢慢厌倦了打不还手的对手,难道没有更有挑战性的敌人吗?\n这时一只剑齿虎出现在你面前。\n它甚至不知道你为什么要攻击它……" },
   ];
 
   return { CATALOG, KIND_CN, makeMonster, makePart, allParts, validate, battle,
-           dodgeTotal, initiativeTotal, commandSupply, energyUsed, priceTotal,
+           dodgeTotal, initiativeTotal, commandSupply, energyUsed, supplyTotal, priceTotal,
            ARCHETYPES, DEFAULT_CFG, label, alive,
            CAMPAIGN, STARTER_BUILD, STARTER_UNLOCKED, STARTER_BUDGET };
 });

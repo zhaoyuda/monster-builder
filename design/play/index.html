@@ -67,6 +67,7 @@
   .logbox .rhead { color: var(--acc); margin-top: 8px; font-weight: 700; }
   .logbox .brk { color: var(--bad); font-weight: 700; }
   .logbox .win { color: var(--ok); font-weight: 800; font-size: 15px; margin-top: 8px; }
+  .logbox .tut { color: var(--warn); background: rgba(251, 191, 36, .08); border-left: 3px solid var(--warn); padding: 6px 8px; border-radius: 0 8px 8px 0; margin: 6px 0; }
   .ctl { display: flex; gap: 8px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
   .speed { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .speed button { border: 0; background: var(--panel2); color: var(--dim); padding: 8px 12px; font-size: 13px; cursor: pointer; }
@@ -117,7 +118,7 @@
 <div class="wrap">
   <header>
     <h1>🦖 手搓大怪兽</h1>
-    <span style="color:var(--dim);font-size:13px">Demo v0.2 · PVE 战役</span>
+    <span style="color:var(--dim);font-size:13px">Demo v0.3 · Akun 零件表 2026-07-15</span>
     <a href="../">← 设计 wiki</a>
   </header>
 
@@ -161,8 +162,8 @@
       <div class="group"><div class="gtitle">头 <span id="headCap"></span></div><div class="chips" id="headRow"></div></div>
       <div class="group"><div class="gtitle">手 <span id="limbCap"></span></div><div class="chips" id="handRow"></div></div>
       <div class="group"><div class="gtitle">腿</div><div class="chips" id="legRow"></div></div>
-      <div class="group"><div class="gtitle">尾巴(插件:不可被攻击,占四肢位)</div><div class="chips" id="tailRow"></div></div>
-      <div class="group"><div class="gtitle">扩展插槽</div><div class="chips" id="slotRow"></div></div>
+      <div class="group"><div class="gtitle">尾巴(插件:独立位不占四肢槽,限 1,不可被攻击)</div><div class="chips" id="tailRow"></div></div>
+      <div class="group"><div class="gtitle">扩展插槽 / 身体插件</div><div class="chips" id="slotRow"></div></div>
     </div>
 
     <button class="btn primary" id="goFight" style="width:100%;padding:14px;font-size:17px">⚔️ 去战斗</button>
@@ -211,12 +212,28 @@ const $ = (id) => document.getElementById(id);
 
 // ===== 存档(localStorage)=====
 const SAVE_KEY = "monster-demo-v1";
+// 旧存档迁移:改名零件映射 + 未知零件过滤(零件表更新后旧配装不至于把页面搞崩)
+const RENAMED = { "粗腿": "灵活的腿" };
+function sanitizeBuild(b) {
+  if (!b || !b.torso) return null;
+  const fix = (n) => RENAMED[n] || n;
+  b.torso = fix(b.torso);
+  if (!E.CATALOG[b.torso]) return null;
+  for (const k of ["heads", "hands", "legs", "tails", "slots"])
+    b[k] = (b[k] || []).map(fix).filter((n) => E.CATALOG[n]);
+  return b;
+}
 function loadSave() {
-  try { return Object.assign({ cleared: [], build: null }, JSON.parse(localStorage.getItem(SAVE_KEY) || "{}")); }
+  try {
+    const s = Object.assign({ cleared: [], build: null }, JSON.parse(localStorage.getItem(SAVE_KEY) || "{}"));
+    s.build = sanitizeBuild(s.build);
+    return s;
+  }
   catch (e) { return { cleared: [], build: null }; }
 }
 let save = loadSave();
 function persist() { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
+persist();   // 迁移结果写回(旧存档里的改名/已删零件只清一次)
 
 const clearedSet = () => new Set(save.cleared);
 function budget() {
@@ -339,8 +356,8 @@ function renderBuild() {
   const cmd = E.commandSupply(m), limbs = m.hands.length + m.legs.length;
   const headSlots = 1 + build.slots.filter((s) => s === "头部插槽").length;
   const limbSlots = 4 + build.slots.filter((s) => s === "四肢插槽").length;
-  const nLimbSlotUsed = build.hands.length + build.legs.length + build.tails.length;
-  const eu = E.energyUsed(m), sup = m.torso.supply;
+  const nLimbSlotUsed = build.hands.length + build.legs.length;   // 尾巴独立位
+  const eu = E.energyUsed(m), sup = E.supplyTotal(m);
 
   $("buildDoll").innerHTML = dollHTML(m, "P");
   const price = E.priceTotal(m), bud = budget();
@@ -349,6 +366,7 @@ function renderBuild() {
     `<span class="${eu > sup ? "bad" : ""}">⚡ 能量 <b>${eu}/${sup}</b></span>`,
     `<span class="${build.heads.length > headSlots ? "bad" : ""}">🧩 头槽 <b>${build.heads.length}/${headSlots}</b></span>`,
     `<span class="${nLimbSlotUsed > limbSlots ? "bad" : ""}">🧩 四肢槽 <b>${nLimbSlotUsed}/${limbSlots}</b></span>`,
+    `<span class="${build.tails.length > 1 ? "bad" : ""}">🧷 尾巴位 <b>${build.tails.length}/1</b></span>`,
     `<span class="${limbs > cmd ? "warn" : ""}">🧠 指挥点 <b>${cmd}</b>(手腿共 ${limbs})</span>`,
     `<span>🎲 先攻 <b>${E.initiativeTotal(m)}</b> · 💨 闪避 <b>${Math.round(E.dodgeTotal(m, E.DEFAULT_CFG) * 100)}%</b></span>`,
   ].join("");
@@ -362,7 +380,7 @@ function renderBuild() {
   $("goFight").disabled = errs.length > 0;
   renderCampaign();
   $("headCap").textContent = `(${build.heads.length}/${headSlots})`;
-  $("limbCap").textContent = `(手+腿+尾 ${nLimbSlotUsed}/${limbSlots})`;
+  $("limbCap").textContent = `(手+腿 ${nLimbSlotUsed}/${limbSlots})`;
 
   $("torsoRow").innerHTML = `<span class="chip" onclick="openSheet('torso')"><b>${build.torso}</b><span class="sub">${statStr(build.torso)}</span></span>`;
   for (const [kind, key, rowId] of [["head","heads","headRow"],["hand","hands","handRow"],["leg","legs","legRow"],["tail","tails","tailRow"],["slot","slots","slotRow"]]) {
@@ -450,7 +468,7 @@ function renderCampaign() {
     const state = cleared ? "cleared" : open ? "" : "locked";
     const stLbl = cleared ? "✅ 已通关(可重打)" : open ? "▶ 可挑战" : "🔒 先通关上一关";
     return `<div class="lv ${state}">
-      <div class="top"><b>第 ${l.lv} 关 · ${l.name}</b><span class="st">${stLbl}</span></div>
+      <div class="top"><b>第 ${l.lv} 关「${l.title}」· ${l.name}</b><span class="st">${stLbl}</span></div>
       ${open ? `<div class="story">${l.story}</div>` : ""}
       <div class="enemy">👿 ${enemySummary(Object.assign({ name: l.name }, l.enemy))}</div>
       <div class="st">🎁 首次通关:${l.reward} 生物质 + 解锁 ${l.unlocks.slice(0, 3).join("、")}${l.unlocks.length > 3 ? " 等" : ""}</div>
@@ -496,10 +514,11 @@ $("speedCtl").querySelectorAll("button").forEach((b) => {
 });
 
 function partRow(p, id) {
+  const noHp = p.maxHp <= 0;   // 装饰件血量 0:纯摆设,不显示血条
   return `<div class="prow ${p.kind === "torso" ? "torso" : ""}" id="${id}">
-    <div class="nm"><b>${p.kind === "torso" ? p.name : E.label(p)}</b><span>攻${p.atk}</span></div>
-    <div class="bar"><i style="width:100%"></i></div>
-    <div class="nm"><span class="hp">${p.hp}/${p.maxHp}</span></div></div>`;
+    <div class="nm"><b>${p.kind === "torso" ? p.name : E.label(p)}</b><span>${noHp ? "摆设" : "攻" + p.atk}</span></div>
+    <div class="bar"><i style="width:${noHp ? 0 : 100}%"></i></div>
+    <div class="nm"><span class="hp">${noHp ? "—" : p.hp + "/" + p.maxHp}</span></div></div>`;
 }
 
 const view = { A: {}, B: {} };
@@ -520,7 +539,7 @@ function renderArena(a, b) {
 }
 function setHp(sideKey, lbl, hp) {
   const v = view[sideKey][lbl];
-  if (!v) return;
+  if (!v || v.maxHp <= 0) return;
   const el = document.getElementById(v.id);
   el.querySelector(".bar i").style.width = Math.max(0, (hp / v.maxHp) * 100) + "%";
   el.querySelector(".hp").textContent = `${Math.max(hp, 0)}/${v.maxHp}`;
@@ -582,9 +601,36 @@ function applyEv(ev, fx) {
   }
 }
 
+// ===== 战役教学提示(Akun 2026-07-15 教学点设计:按战斗事件触发)=====
+// L2「上手」教眩晕+格挡;L3「先攻与闪避」教先攻+闪避
+const TUTORIALS = {
+  2: [
+    { id: "stun", when: (ev) => ev.type === "break" && ev.side === "B" && ev.kind === "head",
+      text: "如果生物的头被击破,它会眩晕 1 回合" },
+    { id: "block", when: (ev) => ev.type === "block" && ev.side === "B",
+      text: "你的手不仅可以用来攻击,还可以用来格挡——格挡成功后伤害会由手承担,同时受到的伤害会减少" },
+  ],
+  3: [
+    { id: "init", when: (ev, m) => ev.type === "round_start" && ev.round === 2 && ev.initA > 0,
+      text: "你的腿和尾巴提供了额外的先攻,所以你总是容易先出手" },
+    { id: "dodge", when: (ev) => ev.type === "dodge" && ev.side === "B",
+      text: "太棒了,你灵活的腿帮助你躲开了剑齿虎的攻击" },
+  ],
+};
+let tutFired = new Set();
+function checkTutorial(ev) {
+  if (!curCamp || !TUTORIALS[curCamp.lv]) return;
+  for (const t of TUTORIALS[curCamp.lv]) {
+    if (tutFired.has(t.id) || !t.when(ev)) continue;
+    tutFired.add(t.id);
+    logLine("📖 " + t.text, "tut");
+  }
+}
+
 let curSeed = null, curCamp = null;
 function startBattle(seed, campLevel) {
   clearTimeout(playTimer);
+  tutFired = new Set();
   curSeed = seed == null ? Math.floor(Math.random() * 1e9) : seed;
   curCamp = campLevel || null;
   const specA = Object.assign({ name: "我的怪兽" }, build);
@@ -602,12 +648,13 @@ function startBattle(seed, campLevel) {
   const step = () => {
     if (i >= evs.length) return finish(rep);
     if (speedMs === 0) {
-      for (; i < evs.length; i++) { const l = evLine(evs[i]); if (l) logLine(l[0], l[1]); applyEv(evs[i], false); }
+      for (; i < evs.length; i++) { const l = evLine(evs[i]); if (l) logLine(l[0], l[1]); checkTutorial(evs[i]); applyEv(evs[i], false); }
       return finish(rep);
     }
     const ev = evs[i++];
     const l = evLine(ev);
     if (l) logLine(l[0], l[1]);
+    checkTutorial(ev);
     applyEv(ev, true);
     playTimer = setTimeout(step, l ? speedMs : 0);
   };
@@ -626,6 +673,7 @@ function finish(rep) {
       persist();
       toast(`🎁 首次通关!+${curCamp.reward} 生物质,解锁:${curCamp.unlocks.join("、")}`);
       logLine(`🎁 获得 ${curCamp.reward} 生物质;解锁零件:${curCamp.unlocks.join("、")}——去「装配」页升级!`, "win");
+      if (curCamp.lv === 3) logLine("(插件「头顶尖刺」「胶质瘤」也已解锁,机制开发中,下版本上架)", "");
     } else {
       logLine("(已通关过,本次无奖励)", "");
     }

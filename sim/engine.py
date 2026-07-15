@@ -64,6 +64,10 @@ class Monster:
         return sum(p.energy for p in self.all_parts() if p.kind != "torso") \
             + sum(t.energy for t in self.tails)
 
+    def supply_total(self) -> int:
+        # 躯干供能 + 供能类插件(普通能量核心,Akun 2026-07-15)
+        return self.torso.supply + sum(s.supply for s in self.slots)
+
     def price_total(self) -> int:
         return (sum(p.price for p in self.all_parts())
                 + sum(t.price for t in self.tails)

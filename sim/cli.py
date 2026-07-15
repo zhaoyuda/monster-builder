@@ -48,8 +48,8 @@ def cmd_duel(args):
     if not args.verbose:
         rep_events = [e for e in rep["events"] if e["type"] in ("break", "stun_set", "stunned", "timeout", "no_command")]
         rep = {**rep, "events": rep_events}
-    print(f"⚔️  A={a.name}(能量 {a.energy_used()}/{a.torso.supply},价 {a.price_total()})"
-          f" vs B={b.name}(能量 {b.energy_used()}/{b.torso.supply},价 {b.price_total()})\n")
+    print(f"⚔️  A={a.name}(能量 {a.energy_used()}/{a.supply_total()},价 {a.price_total()})"
+          f" vs B={b.name}(能量 {b.energy_used()}/{b.supply_total()},价 {b.price_total()})\n")
     print(render(rep, verbose=args.verbose))
 
 

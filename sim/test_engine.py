@@ -38,7 +38,7 @@ class TestAssemblyRules(unittest.TestCase):
         self.assertAlmostEqual(m.dodge_total(RuleConfig()), 0.05)
 
     def test_腿3以上不计闪避(self):
-        m = mk(legs=["新手腿", "新手腿", "粗腿"])
+        m = mk(legs=["新手腿", "新手腿", "灵活的腿"])
         self.assertAlmostEqual(m.dodge_total(RuleConfig()), 0.10)
 
     def test_先攻_存活腿加尾巴(self):
@@ -160,9 +160,10 @@ class TestBattleRules(unittest.TestCase):
         self.assertEqual(hp_before, [p.hp for p in a.all_parts()], "battle 不得改动输入对象")
 
     def test_Q7_攻击次数不等_多出方逐个攻击(self):
+        # command_mode=off:单独验证交错出手语义(新手躯干基础指挥 2 会截断 3 手)
         a = mk("A", hands=["猛爪"])
         b = mk("B", hands=["新手手", "新手手", "新手手"])
-        rep = battle(a, b, seed=5, cfg=RuleConfig(round_limit=1))
+        rep = battle(a, b, seed=5, cfg=RuleConfig(round_limit=1, command_mode="off"))
         hand_attacks_b = [e for e in rep["events"]
                           if e["type"] in ("hit", "dodge", "block") and e.get("side") == "B"]
         self.assertEqual(len(hand_attacks_b), 3, "B 的 3 只手都应出手")
@@ -196,25 +197,25 @@ class TestCommandRules(unittest.TestCase):
     """Q12 提案:指挥点池(command_mode="battle")。默认 off,不影响既有规则。"""
 
     def test_指挥供给_躯干基础加存活头(self):
-        m = mk(heads=["新手头", "肿头"])          # 躯干3 + 2 + 3
-        self.assertEqual(m.command_supply(), 8)
+        m = mk(heads=["新手头", "肿头"])          # 躯干2 + 2 + 3(Akun 2026-07-15:新手躯干基础 2)
+        self.assertEqual(m.command_supply(), 7)
         m.heads[1].hp = 0
-        self.assertEqual(m.command_supply(), 5)   # 头死指挥点即时消失
+        self.assertEqual(m.command_supply(), 4)   # 头死指挥点即时消失
 
     def test_指挥不足_超出的肢体不攻击(self):
-        # 无头:躯干基础 3 点;4 手 → 只有前 3 只出手,第 4 只记 no_command
+        # 无头:躯干基础 2 点;4 手 → 只有前 2 只出手,后 2 只记 no_command
         a = mk("A", hands=["猛爪", "猛爪", "猛爪", "猛爪"])
         b = mk("B", torso="稍微长大的躯干")       # 沙包
         cfg = RuleConfig(round_limit=1, command_mode="battle")
         rep = battle(a, b, cfg=cfg, rng=ScriptRNG([0.0]))
         atks = [e for e in rep["events"] if e["type"] in ("hit", "dodge", "block") and e["side"] == "A"]
         idle = [e for e in rep["events"] if e["type"] == "no_command" and e["side"] == "A"]
-        self.assertEqual(len(atks), 3)
-        self.assertEqual(len(idle), 1)
-        self.assertIn("手4", idle[0]["part"])
+        self.assertEqual(len(atks), 2)
+        self.assertEqual(len(idle), 2)
+        self.assertIn("手3", idle[0]["part"])
 
     def test_头不耗指挥点(self):
-        # 顶撞头(供1) + 躯干3 = 4 点 = 4 肢刚好;若头也耗点则必有 1 肢站桩
+        # 顶撞头(供2) + 躯干2 = 4 点 = 4 肢刚好;若头也耗点则必有 1 肢站桩
         a = mk("A", heads=["顶撞头"], hands=["猛爪", "猛爪"], legs=["踢腿", "踢腿"])
         b = mk("B", torso="稍微长大的躯干")
         cfg = RuleConfig(round_limit=1, command_mode="battle")
@@ -225,7 +226,7 @@ class TestCommandRules(unittest.TestCase):
         self.assertEqual(len(idle), 0)
 
     def test_头被击破_下回合肢体行动力下降(self):
-        # A: 新手头(供2)+躯干3=5 → 4 肢全动;头被打死后掉到 3 → 只动 3 肢
+        # A: 新手头(供2)+躯干2=4 → 4 肢全动;头被打死后掉到 2 → 只动 2 肢
         a = mk("A", heads=["新手头"], hands=["猛爪", "猛爪"], legs=["踢腿", "踢腿"])
         a.heads[0].hp = 1                          # 一击必碎
         b = mk("B", heads=["顶撞头"], torso="稍微长大的躯干")
@@ -235,7 +236,7 @@ class TestCommandRules(unittest.TestCase):
         break_round = next((e["round"] for e in rep["events"]
                             if e["type"] == "break" and e["side"] == "A" and e["kind"] == "head"), None)
         if break_round and break_round + 1 in cmd_events:
-            self.assertEqual(cmd_events[break_round + 1]["cmd_a"], 3, "头死后指挥供给应降为躯干基础 3")
+            self.assertEqual(cmd_events[break_round + 1]["cmd_a"], 2, "头死后指挥供给应降为躯干基础 2")
 
     def test_默认battle_产生指挥事件_off则无(self):
         # Q12 方案A 拍板后(2026-07-07)默认 command_mode="battle"
@@ -303,6 +304,27 @@ class TestCritAndMultiHit(unittest.TestCase):
         # PVE 专属件不可用于玩家配装
         with self.assertRaises(AssertionError):
             build("偷跑", "新手躯干", heads=["猛犸象头"])
+
+    def test_插件更新_能量核心与尾巴独立位(self):
+        # Akun 2026-07-15 插件表:普通能量核心 +20 供能;尾巴独立位不占四肢槽、暂限 1
+        from .builds import build
+        build("核心", "新手躯干", heads=["新手头"], hands=["猛爪", "猛爪", "猛爪", "猛爪"],
+              slots=["普通能量核心"])                  # 能量 50 ≤ 30+20
+        with self.assertRaises(AssertionError):        # 不加核心 → 能量超限
+            build("超能", "新手躯干", heads=["新手头"], hands=["猛爪", "猛爪", "猛爪", "猛爪"])
+        build("尾独立", "有些肌肉的躯干", hands=["猛爪", "猛爪", "猛爪", "猛爪"], tails=["猛尾"])
+        with self.assertRaises(AssertionError):        # 尾巴限 1
+            build("双尾", "新手躯干", tails=["新手尾巴", "猛尾"])
+
+    def test_装饰件血0_不可格挡不入目标池(self):
+        # Akun 2026-07-15:装饰件血量 10→0(Q16 的回答:纯摆设,不能当肉墙/格挡耗材)
+        a = mk("A", heads=["猛头"])
+        b = mk("B", hands=["装饰手"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.0, 0.9, 0.5, 0.1]))
+        self.assertFalse([e for e in rep["events"] if e["type"] == "block"],
+                         "0 血装饰手不应触发格挡")
+        hit = next(e for e in rep["events"] if e["type"] == "hit")
+        self.assertIn("躯干", hit["target"])
 
     def test_PVE配置_老迈的鹿不还手(self):
         deer = mk("鹿", torso="鹿躯干")

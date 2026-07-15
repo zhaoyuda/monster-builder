@@ -35,43 +35,46 @@ class Part:
 
 
 CATALOG = {
-    # 头(供能消耗型,倾向攻击;command=指挥点供给——方案A已拍板,单头数值待调;
-    #    crit=暴击率(本体),Akun 2026-07-07 填入零件表)
+    # 头(供能消耗型,倾向攻击;command=指挥点供给;crit=暴击率(本体)
+    #    数值:Akun 2026-07-15 零件表(顶撞头指挥 1→2、肿头暴击 8%→6%)
     "新手头":   dict(kind="head", atk=10, hp=50,  energy=10, command=2, crit=0.0,  price=200),
     "猛头":     dict(kind="head", atk=20, hp=100, energy=20, command=2, crit=0.08, price=400),
-    "顶撞头":   dict(kind="head", atk=25, hp=75,  energy=20, command=1, crit=0.10, price=400),
-    "肿头":     dict(kind="head", atk=15, hp=125, energy=20, command=3, crit=0.08, price=400),
+    "顶撞头":   dict(kind="head", atk=25, hp=75,  energy=20, command=2, crit=0.10, price=400),
+    "肿头":     dict(kind="head", atk=15, hp=125, energy=20, command=3, crit=0.06, price=400),
+    # ⚠️ 喷火头(AOE+灼烧)——机制引擎未支持,暂不入目录(见 05 页 Wave2 专项)
     # 手(攻防平衡,可格挡)
     "新手手":   dict(kind="hand", atk=5,  hp=25,  energy=5,  price=100),
     "猛爪":     dict(kind="hand", atk=10, hp=50,  energy=10, price=200),
     "强力爪":   dict(kind="hand", atk=13, hp=35,  energy=10, price=200),
     "小手手":   dict(kind="hand", atk=7,  hp=65,  energy=10, price=200),
+    # ⚠️ 抓握手(闪避清零)/ 长有芽孢的手(死后重生)——机制引擎未支持,暂不入目录
     # 腿(提供先攻/闪避;踢腿无先攻无闪避,按 Q6 推荐视为故意)
     "新手腿":   dict(kind="leg",  atk=3,  hp=20,  energy=5,  initiative=1, dodge=0.05, price=100),
     "猛腿":     dict(kind="leg",  atk=6,  hp=50,  energy=10, initiative=2, dodge=0.05, price=200),
     "鞭腿":     dict(kind="leg",  atk=8,  hp=40,  energy=10, initiative=2, dodge=0.05, price=200),
-    "粗腿":     dict(kind="leg",  atk=4,  hp=60,  energy=10, initiative=2, dodge=0.07, price=200),
+    "灵活的腿": dict(kind="leg",  atk=4,  hp=60,  energy=10, initiative=2, dodge=0.07, price=200),  # 原「粗腿」,Akun 2026-07-15 改名
     "踢腿":     dict(kind="leg",  atk=10, hp=50,  energy=10, initiative=0, dodge=0.0,  price=200),
-    # 躯干(供能来源,血空即败;command=基础指挥点——无头时的"脊髓反射"底线,大躯干略高回应 Q11)
-    # 数值经参数扫描定为 3/4/3:普通配装(1头+4肢)完全感觉不到指挥约束,只有无头/极端堆量被惩罚
-    "新手躯干":       dict(kind="torso", atk=0, hp=100, supply=30, command=3, price=500),  # Q3 按公式修正
-    "稍微长大的躯干": dict(kind="torso", atk=0, hp=200, supply=40, command=4, price=800),
-    "有些肌肉的躯干": dict(kind="torso", atk=0, hp=150, supply=50, command=3, price=800),
-    # 插件(E8:不可被攻击,不入目标池)
+    # 躯干(供能来源,血空即败;command=基础指挥点——无头时的"脊髓反射"底线)
+    # Akun 2026-07-15 拍板:基础指挥 2/3/3(采纳 meta 报告方向),价格按新公式(1供能=5价)350/700/700,供能 30/60/80
+    "新手躯干":       dict(kind="torso", atk=0, hp=100, supply=30, command=2, price=350),
+    "稍微长大的躯干": dict(kind="torso", atk=0, hp=200, supply=60, command=3, price=700),
+    "有些肌肉的躯干": dict(kind="torso", atk=0, hp=150, supply=80, command=3, price=700),
+    # 插件(E8:不可被攻击,不入目标池;尾巴为独立位,不占四肢槽——Akun 2026-07-15「位置:尾巴(独立)」)
     "新手尾巴": dict(kind="tail", atk=0, hp=0, initiative=1, price=20),
     "猛尾":     dict(kind="tail", atk=0, hp=0, initiative=2, price=40),
-    "四肢插槽": dict(kind="slot", atk=0, hp=0, price=30),   # +1 手/腿/尾位(Q2)
+    "四肢插槽": dict(kind="slot", atk=0, hp=0, price=30),   # +1 手/腿位(Q2)
     "头部插槽": dict(kind="slot", atk=0, hp=0, price=50),   # +1 头位(Q2)
-    # 装饰件(PVE 起始装,Q13;数值为 Yuda 默认,待 Akun 核)
-    "装饰手":   dict(kind="hand", atk=0, hp=10, energy=0, price=0),
-    "装饰腿":   dict(kind="leg",  atk=0, hp=10, energy=0, initiative=0, dodge=0.0, price=0),
-    # PVE 专属敌方部件(03-pve 前三关,Akun 2026-07-07 设计;不入玩家目录,不受装配约束)
+    "普通能量核心": dict(kind="slot", atk=0, hp=0, supply=20, price=100),  # 身体插件:供能+20;暂限每躯干 1 个
+    # 装饰件(PVE 起始装,Q13;Akun 2026-07-15 血量 10→0:纯摆设,不可当肉墙——Q16 的回答)
+    "装饰手":   dict(kind="hand", atk=0, hp=0, energy=0, price=0),
+    "装饰腿":   dict(kind="leg",  atk=0, hp=0, energy=0, initiative=0, dodge=0.0, price=0),
+    # PVE 专属敌方部件(03-pve 前三关;Akun 2026-07-15:恐兽改剑齿虎,爪 攻5→2/血25→50)
     "鹿躯干":     dict(kind="torso", atk=0, hp=50,  supply=99, command=99, pve=True, price=0),
     "猛犸象头":   dict(kind="head",  atk=2, hp=75,  hits=2, pve=True, price=0),   # 双击:2 攻 ×2 次
     "猛犸象躯干": dict(kind="torso", atk=0, hp=200, supply=99, command=99, pve=True, price=0),
-    "恐兽头":     dict(kind="head",  atk=5, hp=100, pve=True, price=0),
-    "恐兽躯干":   dict(kind="torso", atk=0, hp=100, supply=99, command=99, pve=True, price=0),
-    "恐兽爪":     dict(kind="hand",  atk=5, hp=25,  pve=True, price=0),
+    "剑齿虎头":   dict(kind="head",  atk=5, hp=100, pve=True, price=0),
+    "剑齿虎躯干": dict(kind="torso", atk=0, hp=100, supply=99, command=99, pve=True, price=0),
+    "剑齿虎爪":   dict(kind="hand",  atk=2, hp=50,  pve=True, price=0),
     # 机制件原型(Q15 提案,数值未定价,仅供模拟验证;Akun 拍板后再进零件表)
     "猎臂头":     dict(kind="head",  atk=15, hp=75, energy=20, command=2, hunts="hand", price=400),
 }

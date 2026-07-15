@@ -1,7 +1,8 @@
 # 随机配装元游戏研究:固定预算采样合法配装 → 两阶段淘汰 → 顶层构成分析
 # 目的:替代"手捏流派"评估平衡改动(2026-07-12 诊断:手捏流派五连误判)
 #   python3 -m sim.meta --variant baseline
-#   变体:baseline / atk15(攻击力 1攻=15价 重定价) / hand125(手类加价25%) / cmd2(躯干基础指挥 -1)
+# 2026-07-15 起 baseline = Akun 新零件表(躯干指挥 2/3/3、价 350/700/700、供能 30/60/80)
+#   变体:muscle2(肌肉躯干指挥 3→2,即 meta 报告原推荐 2/3/2)/ atk15 / hand125 / combo
 import argparse
 import random
 from collections import Counter
@@ -11,7 +12,7 @@ from .parts import make, CATALOG
 
 HEADS = ["新手头", "猛头", "顶撞头", "肿头"]
 HANDS = ["新手手", "猛爪", "强力爪", "小手手"]
-LEGS = ["新手腿", "猛腿", "鞭腿", "粗腿", "踢腿"]
+LEGS = ["新手腿", "猛腿", "鞭腿", "灵活的腿", "踢腿"]
 TAILS = ["新手尾巴", "猛尾"]
 TORSOS = ["新手躯干", "稍微长大的躯干", "有些肌肉的躯干"]
 
@@ -26,23 +27,21 @@ STAGE2_GAMES = 60         # 每对(两个方向各半,抵消 A/B 侧噪声)
 def apply_variant(variant):
     """按变体重定价/改规则。返回 RuleConfig。"""
     if variant == "atk15":
-        # 现行公式:价 = 10*攻 + 2*血 + 10*供能 + 机动溢价(先攻/闪避,≈30-40)
+        # 现行公式(Akun 2026-07-15):价 = 10*攻 + 2*血 + 5*供能 + 机动溢价(先攻/闪避)
         # 变体:攻击系数 10 → 15(攻击会滚雪球,血不会——诊断报告的价格层修法)
         for name, s in CATALOG.items():
-            base_old = 10 * s.get("atk", 0) + 2 * s.get("hp", 0) + 10 * s.get("supply", 0)
+            base_old = 10 * s.get("atk", 0) + 2 * s.get("hp", 0) + 5 * s.get("supply", 0)
             premium = s.get("price", 0) - base_old
             if s.get("price", 0) > 0:
-                s["price"] = 15 * s.get("atk", 0) + 2 * s.get("hp", 0) + 10 * s.get("supply", 0) + premium
+                s["price"] = 15 * s.get("atk", 0) + 2 * s.get("hp", 0) + 5 * s.get("supply", 0) + premium
     elif variant == "hand125":
         for name, s in CATALOG.items():
             if s.get("kind") == "hand" and s.get("price", 0) > 0:
                 s["price"] = round(s["price"] * 1.25)
-    elif variant == "cmd2":
-        for name in TORSOS:
-            CATALOG[name]["command"] -= 1
+    elif variant == "muscle2":
+        CATALOG["有些肌肉的躯干"]["command"] = 2   # Akun 2/3/3 → meta 报告原推荐 2/3/2
     elif variant == "combo":
-        for name in TORSOS:
-            CATALOG[name]["command"] -= 1
+        CATALOG["有些肌肉的躯干"]["command"] = 2
         for name, s in CATALOG.items():
             if s.get("kind") == "hand" and s.get("price", 0) > 0:
                 s["price"] = round(s["price"] * 1.25)
@@ -56,7 +55,8 @@ def gen_spec(rng):
         n_heads = rng.choice([0, 1, 1, 1, 2])
         n_hands = rng.randint(0, 4)
         n_legs = rng.randint(0, 4)
-        n_tails = rng.choice([0, 0, 0, 1])
+        n_tails = rng.choice([0, 0, 0, 1])   # 尾巴独立位,限 1(Akun 2026-07-15)
+        n_core = rng.choice([0, 0, 0, 1])    # 普通能量核心(供能+20,限 1)
         if not 1 <= n_hands + n_legs + n_tails + n_heads <= 7:
             continue
         spec = dict(
@@ -65,9 +65,10 @@ def gen_spec(rng):
             hands=sorted(rng.choice(HANDS) for _ in range(n_hands)),
             legs=sorted(rng.choice(LEGS) for _ in range(n_legs)),
             tails=sorted(rng.choice(TAILS) for _ in range(n_tails)),
+            core=n_core,
         )
         m = build(spec)
-        if m.energy_used() > m.torso.supply:
+        if m.energy_used() > m.supply_total():
             continue
         if not MIN_PRICE <= m.price_total() <= BUDGET:
             continue
@@ -75,9 +76,10 @@ def gen_spec(rng):
 
 
 def build(spec):
-    n_limbs = len(spec["hands"]) + len(spec["legs"]) + len(spec["tails"])
+    n_limbs = len(spec["hands"]) + len(spec["legs"])   # 尾巴不占四肢槽
     slots = (["头部插槽"] * max(0, len(spec["heads"]) - 1)
-             + ["四肢插槽"] * max(0, n_limbs - 4))
+             + ["四肢插槽"] * max(0, n_limbs - 4)
+             + ["普通能量核心"] * spec.get("core", 0))
     return Monster(
         name=label(spec),
         torso=make(spec["torso"]),
@@ -97,6 +99,8 @@ def label(spec):
     for key in ("heads", "hands", "legs", "tails"):
         if spec[key]:
             bits.append(grp(spec[key]))
+    if spec.get("core"):
+        bits.append("能量核心")
     return "|".join(bits)
 
 
@@ -124,7 +128,7 @@ def comp_stats(specs):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="baseline",
-                    choices=["baseline", "atk15", "hand125", "cmd2", "combo"])
+                    choices=["baseline", "muscle2", "atk15", "hand125", "combo"])
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
 
