@@ -58,9 +58,11 @@
   .prow.dead { opacity: .35; filter: grayscale(1); }
   .prow.dead .nm b { text-decoration: line-through; }
   .prow.torso .nm b { color: var(--acc); }
-  .bar { height: 7px; background: #000; border-radius: 4px; overflow: hidden; margin-top: 2px; }
-  .bar i { display: block; height: 100%; border-radius: 4px; transition: width .25s; }
-  .A .bar i { background: var(--hpA); } .B .bar i { background: var(--hpB); }
+  .bar { height: 7px; background: #000; border-radius: 4px; overflow: hidden; margin-top: 2px; position: relative; }
+  .bar i { display: block; position: absolute; top: 0; left: 0; height: 100%; border-radius: 4px; }
+  .bar i.fill { transition: width .12s; z-index: 2; }
+  .bar i.ghost { background: rgba(255,255,255,.5); transition: width .3s ease-out .16s; z-index: 1; }
+  .A .bar i.fill { background: var(--hpA); } .B .bar i.fill { background: var(--hpB); }
   .logbox { background: #0d0b16; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; height: 300px; overflow-y: auto; font-size: 13px; margin-top: 12px; }
   .logbox p { margin: 3px 0; color: var(--dim); }
   .logbox p b { color: var(--text); font-weight: 600; }
@@ -91,11 +93,11 @@
   .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; background: var(--acc2); color: #fff; padding: 12px 18px; border-radius: 12px; font-weight: 700; z-index: 99; box-shadow: 0 8px 30px rgba(0,0,0,.5); display: none; max-width: 90vw; }
   .lock { opacity: .45; }
   /* 纸偶怪兽 */
-  .stage { display: flex; justify-content: space-around; align-items: flex-end; padding: 10px 4px 14px; min-height: 150px; background: radial-gradient(ellipse at 50% 120%, #241f38 0%, transparent 70%); border-radius: 12px; }
-  .doll { display: flex; flex-direction: column; align-items: center; gap: 3px; transition: transform .18s; position: relative; }
+  .stage { display: flex; justify-content: space-around; align-items: flex-end; padding: 10px 4px 14px; min-height: 150px; background: radial-gradient(ellipse at 50% 120%, #241f38 0%, transparent 70%); border-radius: 12px; position: relative; overflow: hidden; }
+  .doll { display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
   .drow { display: flex; gap: 4px; align-items: flex-end; justify-content: center; }
   .dmid { align-items: center; }
-  .dpart { position: relative; border: 2px solid rgba(0,0,0,.45); box-shadow: inset 0 -5px rgba(0,0,0,.22), inset 0 3px rgba(255,255,255,.14); transition: transform .16s, opacity .4s, filter .4s; }
+  .dpart { position: relative; border: 2px solid rgba(0,0,0,.45); box-shadow: inset 0 -5px rgba(0,0,0,.22), inset 0 3px rgba(255,255,255,.14); transition: opacity .4s, filter .4s; }
   .dpart.head { width: 26px; height: 26px; border-radius: 50% 50% 42% 42%; }
   .dpart.hand { width: 20px; height: 20px; border-radius: 7px 7px 10px 4px; }
   .dpart.leg  { width: 13px; height: 27px; border-radius: 5px 5px 6px 6px; }
@@ -104,21 +106,53 @@
   .dpart.deco { border-style: dashed; opacity: .8; }
   .dpart .eye { position: absolute; top: 7px; left: 6px; width: 5px; height: 5px; border-radius: 50%; background: #14121f; box-shadow: 9px 0 0 #14121f; }
   .dpart.dead { filter: grayscale(1); opacity: .3; transform: rotate(22deg) translateY(5px); }
-  .doll.lungeL { transform: translateX(-12px); }
-  .doll.lungeR { transform: translateX(12px); }
-  .doll.step  { transform: translateX(-8px) rotate(-3deg); }
-  @keyframes hitflash { 0% { filter: brightness(2.4) saturate(.2); transform: translateX(2px); } 60% { transform: translateX(-2px); } 100% {} }
-  .dpart.hitfx { animation: hitflash .32s; }
-  @keyframes floatup { 0% { opacity: 0; transform: translate(-50%, 2px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -22px); } }
-  .fxlabel { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 800; white-space: nowrap; pointer-events: none; animation: floatup .9s forwards; z-index: 6; text-shadow: 0 1px 3px #000; }
+  /* —— 事件视觉语法(E=向右/我方出手,W=向左/敌方出手)—— */
+  @keyframes atkE { 0%{transform:none} 30%{transform:translateX(-7px)} 55%{transform:translateX(20px)} 72%{transform:translateX(20px)} 100%{transform:none} }
+  @keyframes atkW { 0%{transform:none} 30%{transform:translateX(7px)} 55%{transform:translateX(-20px)} 72%{transform:translateX(-20px)} 100%{transform:none} }
+  @keyframes bounceE { 0%{transform:none} 40%{transform:translateX(16px)} 65%{transform:translateX(-9px)} 100%{transform:none} }
+  @keyframes bounceW { 0%{transform:none} 40%{transform:translateX(-16px)} 65%{transform:translateX(9px)} 100%{transform:none} }
+  @keyframes joltE { 0%{transform:none} 30%{transform:translateX(7px) rotate(1.5deg)} 100%{transform:none} }
+  @keyframes joltW { 0%{transform:none} 30%{transform:translateX(-7px) rotate(-1.5deg)} 100%{transform:none} }
+  @keyframes slipE { 0%{transform:none} 35%{transform:translateX(14px) rotate(3deg)} 100%{transform:none} }
+  @keyframes slipW { 0%{transform:none} 35%{transform:translateX(-14px) rotate(-3deg)} 100%{transform:none} }
+  @keyframes squashK { 0%{transform:none} 40%{transform:scaleX(1.06) scaleY(.94)} 100%{transform:none} }
+  @keyframes wobbleK { 0%{transform:none} 22%{transform:rotate(3deg)} 48%{transform:rotate(-3deg)} 72%{transform:rotate(1.6deg)} 100%{transform:none} }
+  .doll.defeat { filter: grayscale(1) brightness(.7); opacity: .55; transform: translateY(9px) rotate(7deg); transition: transform .45s ease-in, filter .35s, opacity .45s; }
+  /* 屏震(只动 transform,幅度递减) */
+  @keyframes shakeS { 0%,100%{transform:none} 30%{transform:translate(2px,-1px)} 60%{transform:translate(-2px,1px)} }
+  @keyframes shakeM { 0%,100%{transform:none} 20%{transform:translate(5px,-2px)} 45%{transform:translate(-4px,2px)} 70%{transform:translate(2px,-1px)} }
+  @keyframes shakeL { 0%,100%{transform:none} 15%{transform:translate(8px,-3px)} 35%{transform:translate(-7px,3px)} 60%{transform:translate(4px,-2px)} 80%{transform:translate(-2px,1px)} }
+  .stage.shk1 { animation: shakeS .09s; } .stage.shk2 { animation: shakeM .12s; } .stage.shk3 { animation: shakeL .16s; }
+  /* 命中闪白 + 轮廓 */
+  @keyframes hitflash { 0% { filter: brightness(2.4) contrast(1.3) saturate(.2); box-shadow: 0 0 0 2px rgba(255,255,255,.9); } 60% { box-shadow: 0 0 0 2px rgba(255,255,255,.35); } 100% {} }
+  .dpart.hitfx { animation: hitflash .3s; }
+  /* 接触点冲击环 */
+  @keyframes impactK { 0% { transform: translate(-50%,-50%) scale(.3); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1.4); opacity: 0; } }
+  .impact { position: absolute; top: 50%; left: 50%; width: 26px; height: 26px; border: 2px solid #fff; border-radius: 50%; pointer-events: none; z-index: 7; animation: impactK .15s ease-out forwards; }
+  .impact.big { width: 38px; height: 38px; border-color: #fbbf24; box-shadow: 0 0 0 5px rgba(251,191,36,.35); }
+  /* 分级伤害数字 */
+  @keyframes floatup { 0% { opacity: 0; transform: translate(-50%, 3px) scale(.8); } 15% { opacity: 1; transform: translate(-50%, -2px) scale(1); } 100% { opacity: 0; transform: translate(-50%, -24px) scale(1); } }
+  @keyframes popup  { 0% { opacity: 0; transform: translate(-50%, 2px) scale(.6); } 25% { opacity: 1; transform: translate(-50%, -6px) scale(1.22); } 45% { transform: translate(-50%, -8px) scale(1); } 100% { opacity: 0; transform: translate(-50%, -28px) scale(1); } }
+  .fxlabel { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 800; white-space: nowrap; pointer-events: none; animation: floatup .5s forwards; z-index: 8; text-shadow: 0 1px 3px #000; }
+  .fxlabel.d1 { font-size: 16px; animation: floatup .55s forwards; }
+  .fxlabel.d2 { font-size: 21px; animation: popup .6s forwards; }
+  .fxlabel.d3 { font-size: 26px; color: #fbbf24; -webkit-text-stroke: 1px #6b3f00; animation: popup .7s forwards; }
+  .fxlabel.fastfx { animation-duration: .18s !important; }
+  /* 击破残骸(克隆节点,不动真实 DOM) */
+  .debris { position: absolute; pointer-events: none; z-index: 5; transition: transform .35s cubic-bezier(.2,.7,.4,1), opacity .4s; }
+  .debris.rest { filter: grayscale(1); opacity: .45; }
   .buildStage { display: flex; justify-content: center; padding: 8px 0 4px; }
+  @media (prefers-reduced-motion: reduce) {
+    .stage.shk1, .stage.shk2, .stage.shk3 { animation: none; }
+    .debris { transition: opacity .3s; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>🦖 手搓大怪兽</h1>
-    <span style="color:var(--dim);font-size:13px">Demo v0.3 · Akun 零件表 2026-07-15</span>
+    <span style="color:var(--dim);font-size:13px">Demo v0.4 · 打击感升级</span>
     <a href="../">← 设计 wiki</a>
   </header>
 
@@ -194,6 +228,7 @@
           <button data-s="110">4×</button><button data-s="0">瞬间</button>
         </div>
         <button class="btn ghost" id="rematch">🎲 再战一局</button>
+        <button class="btn ghost" id="muteBtn" title="音效开关"></button>
         <span class="seed" id="seedLbl"></span>
       </div>
     </div>
@@ -318,37 +353,183 @@ function dollHTML(m, sideKey) {
 function dollEl(sideKey, key) {
   return document.querySelector(`[data-dk="${sideKey}|${key}"]`);
 }
-function dollFx(sideKey, key, label, color) {
+
+// ===== FX 工具:所有特效计时器统一登记,切速度/瞬间/再战时一并清空,不留上局残影 =====
+const fxTimers = new Set();
+function later(fn, ms) {
+  const t = setTimeout(() => { fxTimers.delete(t); fn(); }, ms);
+  fxTimers.add(t);
+  return t;
+}
+function clearFx() {
+  for (const t of fxTimers) clearTimeout(t);
+  fxTimers.clear();
+  document.querySelectorAll(".fxlabel, .impact, .debris").forEach((n) => n.remove());
+  const st = document.querySelector("#pgFight .stage");
+  if (st) st.classList.remove("shk1", "shk2", "shk3");
+  for (const k of ["A", "B"]) {
+    const d = $("doll" + k + "In");
+    if (d) { d.style.animation = ""; d.classList.remove("defeat"); }
+  }
+}
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const isFast = () => speedMs > 0 && speedMs <= 110;   // 4× 挡
+
+function dollFx(sideKey, key, label, color, sizeCls, flash = true) {
   const el = dollEl(sideKey, key);
   if (!el) return;
-  el.classList.remove("hitfx");
-  void el.offsetWidth;   // 重启动画
-  el.classList.add("hitfx");
+  if (flash) { el.classList.remove("hitfx"); void el.offsetWidth; el.classList.add("hitfx"); }
   if (label) {
     const s = document.createElement("span");
-    s.className = "fxlabel";
+    s.className = "fxlabel" + (sizeCls ? " " + sizeCls : "") + (isFast() ? " fastfx" : "");
     s.textContent = label;
     if (color) s.style.color = color;
     el.appendChild(s);
-    setTimeout(() => s.remove(), 900);
+    later(() => s.remove(), 800);
   }
 }
-function dollLunge(sideKey) {
+function dollAnim(sideKey, name, ms) {   // 整只纸偶播一段 keyframes(蓄力前冲/弹回/侧滑/失衡)
   const d = $("doll" + sideKey + "In");
   if (!d) return;
-  d.classList.add(sideKey === "A" ? "lungeR" : "lungeL");
-  setTimeout(() => d.classList.remove("lungeR", "lungeL"), 170);
+  d.style.animation = "none";
+  void d.offsetWidth;
+  d.style.animation = `${name} ${ms}ms cubic-bezier(.2,.8,.3,1)`;
+  later(() => { d.style.animation = ""; }, ms + 40);
 }
-function dollStep(sideKey) {
-  const d = $("doll" + sideKey + "In");
-  if (!d) return;
-  d.classList.add("step");
-  setTimeout(() => d.classList.remove("step"), 200);
+function partAnim(sideKey, key, name, ms) {   // 单个部件动画(格挡手压缩等)
+  const el = dollEl(sideKey, key);
+  if (!el) return;
+  el.style.animation = "none";
+  void el.offsetWidth;
+  el.style.animation = `${name} ${ms}ms ease-out`;
+  later(() => { el.style.animation = ""; }, ms + 40);
+}
+function impactAt(sideKey, key, big) {   // 接触点冲击环
+  const el = dollEl(sideKey, key);
+  if (!el) return;
+  const s = document.createElement("span");
+  s.className = "impact" + (big ? " big" : "");
+  el.appendChild(s);
+  later(() => s.remove(), 200);
+}
+function shake(level) {   // 屏震 1/2/3,只动舞台容器 transform
+  if (!level || REDUCED) return;
+  const st = document.querySelector("#pgFight .stage");
+  if (!st) return;
+  st.classList.remove("shk1", "shk2", "shk3");
+  void st.offsetWidth;
+  st.classList.add("shk" + level);
+  later(() => st.classList.remove("shk" + level), 240);
 }
 function dollKill(sideKey, key) {
   const el = dollEl(sideKey, key);
   if (el) el.classList.add("dead");
 }
+function debrisFly(sideKey, key, ft) {   // 击破飞散:克隆视觉节点抛出落地,真实 DOM 不动
+  if (REDUCED || ft > 1) return;
+  const el = dollEl(sideKey, key);
+  const st = document.querySelector("#pgFight .stage");
+  if (!el || !st) return;
+  const old = st.querySelectorAll(".debris");
+  if (old.length >= 6) old[0].remove();   // 残骸上限 6
+  const er = el.getBoundingClientRect(), sr = st.getBoundingClientRect();
+  if (!er.width) return;
+  const c = el.cloneNode(true);
+  c.querySelectorAll(".fxlabel, .impact").forEach((n) => n.remove());
+  c.classList.remove("hitfx", "dead");
+  c.classList.add("debris");
+  c.style.cssText += `;left:${er.left - sr.left}px;top:${er.top - sr.top}px;width:${er.width}px;height:${er.height}px;margin:0;`;
+  st.appendChild(c);
+  const dx = (sideKey === "A" ? -1 : 1) * (26 + Math.random() * 26);
+  const rot = (Math.random() < .5 ? -1 : 1) * (120 + Math.random() * 100);
+  const floor = sr.height - (er.top - sr.top) - er.height - 4;
+  requestAnimationFrame(() => {
+    c.style.transform = `translate(${dx * .6}px, -22px) rotate(${rot * .5}deg)`;          // 上抛
+    later(() => {
+      c.style.transition = "transform .22s cubic-bezier(.5,0,.9,.6)";                     // 近似重力下落
+      c.style.transform = `translate(${dx}px, ${Math.max(0, floor)}px) rotate(${rot}deg)`;
+      later(() => c.classList.add("rest"), 240);
+    }, 180);
+  });
+}
+
+// ===== WebAudio 合成音效(无音频文件;首次用户手势时解锁,全页一个 AudioContext)=====
+const AudioFX = (() => {
+  let ctx = null, noiseBuf = null;
+  let muted = localStorage.getItem("monster-mute") === "1";
+  const lastPlay = {};
+  function ensure() {
+    if (muted) return null;
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.25), ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ctx.state === "suspended") ctx.resume();   // iOS 切后台会挂起,回来要 resume
+    return ctx;
+  }
+  const rnd = (v, pct) => v * (1 + (Math.random() * 2 - 1) * pct);   // 音高随机 ±pct,防机关枪
+  function osc(type, f0, f1, t0, dur, vol) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(rnd(f0, .05), t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(30, rnd(f1, .05)), t0 + dur);
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(.001, t0 + dur);
+    o.connect(g).connect(ctx.destination);
+    o.start(t0); o.stop(t0 + dur + .02);
+  }
+  function noise(t0, dur, vol, freq) {
+    const s = ctx.createBufferSource(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+    s.buffer = noiseBuf;
+    f.type = "bandpass"; f.frequency.value = freq; f.Q.value = .9;
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(.001, t0 + dur);
+    s.connect(f).connect(g).connect(ctx.destination);
+    s.start(t0); s.stop(t0 + dur + .02);
+  }
+  function play(kind, tier) {
+    if (muted || !ensure()) return;
+    const now = performance.now();
+    if (isFast() && (kind === "hit" || kind === "block" || kind === "dodge")) {
+      if (now - (lastPlay[kind] || 0) < 90) return;   // 4× 限流:同类 90ms 至多一次(break/stun 豁免)
+    }
+    lastPlay[kind] = now;
+    const t0 = ctx.currentTime, q = isFast() ? .6 : 1;
+    if (kind === "hit") {
+      osc("sine", 130 - tier * 12, 55, t0, .09 + tier * .02, .22 * q * (1 + tier * .25));
+      noise(t0, .05, .1 * q, 900);
+      if (tier >= 2) osc("square", 720, 240, t0, .05, .12 * q);   // 重击/暴击叠高频瞬态
+    } else if (kind === "block") {
+      osc("triangle", 880, 660, t0, .07, .12 * q);
+      noise(t0, .04, .05 * q, 2500);
+    } else if (kind === "dodge") {
+      noise(t0, .08, .08 * q, 3200);
+    } else if (kind === "break") {
+      noise(t0, .2, .3, 700);
+      osc("sawtooth", 420, 70, t0, .18, .2);
+      noise(t0 + .06, .12, .18, 500);
+    } else if (kind === "stun") {
+      osc("sine", 240, 100, t0, .28, .16);
+    } else if (kind === "win") {
+      osc("sine", 523, 0, t0, .12, .15);
+      osc("sine", 784, 0, t0 + .12, .2, .15);
+    } else if (kind === "lose") {
+      osc("sine", 330, 0, t0, .14, .13);
+      osc("sine", 220, 0, t0 + .14, .26, .13);
+    }
+  }
+  function toggle() {
+    muted = !muted;
+    localStorage.setItem("monster-mute", muted ? "1" : "0");
+    if (!muted) ensure();
+    return muted;
+  }
+  return { play, ensure, toggle, get muted() { return muted; } };
+})();
 
 function renderBuild() {
   const m = monster();
@@ -515,9 +696,10 @@ $("speedCtl").querySelectorAll("button").forEach((b) => {
 
 function partRow(p, id) {
   const noHp = p.maxHp <= 0;   // 装饰件血量 0:纯摆设,不显示血条
+  const w = noHp ? 0 : 100;
   return `<div class="prow ${p.kind === "torso" ? "torso" : ""}" id="${id}">
     <div class="nm"><b>${p.kind === "torso" ? p.name : E.label(p)}</b><span>${noHp ? "摆设" : "攻" + p.atk}</span></div>
-    <div class="bar"><i style="width:${noHp ? 0 : 100}%"></i></div>
+    <div class="bar"><i class="ghost" style="width:${w}%"></i><i class="fill" style="width:${w}%"></i></div>
     <div class="nm"><span class="hp">${noHp ? "—" : p.hp + "/" + p.maxHp}</span></div></div>`;
 }
 
@@ -541,7 +723,9 @@ function setHp(sideKey, lbl, hp) {
   const v = view[sideKey][lbl];
   if (!v || v.maxHp <= 0) return;
   const el = document.getElementById(v.id);
-  el.querySelector(".bar i").style.width = Math.max(0, (hp / v.maxHp) * 100) + "%";
+  const w = Math.max(0, (hp / v.maxHp) * 100) + "%";
+  el.querySelector(".bar .fill").style.width = w;    // 实际血条立即掉
+  el.querySelector(".bar .ghost").style.width = w;   // 白色残影延迟 .16s 再追上(CSS transition-delay)
   el.querySelector(".hp").textContent = `${Math.max(hp, 0)}/${v.maxHp}`;
   if (hp <= 0) el.classList.add("dead");
 }
@@ -569,36 +753,92 @@ function evLine(ev) {
   if (t === "timeout") return [`⏱ 打满回合上限,按躯干血量比判定`, "rhead"];
   return null;
 }
-function applyEv(ev, fx) {
+// ===== 回放调度:按事件类型 × 速度挡分配 前摇/顿帧/屏震/音效/飘字(速度矩阵见 review 计划)=====
+// 特效档 ft:0=1×全套, 1=2×压缩, 2=4×只留音效限流+短数字, (瞬间不走这条路)
+const fxTier = () => (speedMs >= 600 ? 0 : speedMs >= 280 ? 1 : 2);
+function dmgTier(ev) {   // 伤害分档:0 小伤 / 1 普通 / 2 重击 / 3 暴击
+  if (ev.crit) return 3;
+  const d = ev.dmg || 0;
+  return d >= 20 ? 2 : d >= 8 ? 1 : 0;
+}
+// 事件节拍(× speedMs):无信息事件快速略过,重事件多停——节奏压缩比特效更救观感
+const BEAT = { round_start: .55, command: .25, no_command: .3, stun_set: .45, stunned: .8,
+               dodge: .85, block: 1, hit: 1, break: 1.35, timeout: 1 };
+
+function playEv(ev, ft) {
   const t = ev.type;
+  const dir = ev.side === "A" ? "E" : "W";   // 我方在左,出手向右
   if (t === "hit") {
-    setHp(other(ev.side), ev.target, ev.targetHp);
-    if (fx) {
-      dollLunge(ev.side);
-      dollFx(other(ev.side), ev.target, (ev.crit ? "💥" : "") + "-" + ev.dmg, ev.crit ? "#fbbf24" : "#f87171");
-    }
-  } else if (t === "block") {
-    setHp(other(ev.side), ev.blocker, ev.blockerHp);
-    if (fx) {
-      dollLunge(ev.side);
-      dollFx(other(ev.side), ev.blocker, "🛡-" + ev.taken, "#8bd5ff");
-    }
-  } else if (t === "dodge") {
-    if (fx) {
-      dollLunge(ev.side);
-      dollStep(other(ev.side));
-      dollFx(other(ev.side), view[other(ev.side)]._torso, "💨闪避", "#8bd5ff");
-    }
-  } else if (t === "break") {
-    dollKill(ev.side, ev.part);
-    if (fx) dollFx(ev.side, ev.part, "💀", "#f87171");
-  } else if (t === "no_command") {
-    if (fx) dollFx(ev.side, ev.part, "🚫站桩", "#9b93b8");
-  } else if (t === "stunned") {
-    if (fx) dollFx(ev.side, view[ev.side]._torso, "💫眩晕", "#fbbf24");
-  } else if (t === "stun_set") {
-    if (fx) dollFx(ev.side, view[ev.side]._torso, "⚡头被毁!", "#fbbf24");
+    const g = dmgTier(ev);
+    const windup = ft === 0 ? 240 : ft === 1 ? 150 : 0;   // 蓄力→前冲动画总长,接触点在 55%
+    const contact = Math.round(windup * .55);
+    if (ft <= 1) dollAnim(ev.side, "atk" + dir, windup);
+    later(() => {   // 接触时刻:音效/掉血/数字/冲击环/后错/屏震绑在同一瞬间
+      AudioFX.play("hit", g);
+      setHp(other(ev.side), ev.target, ev.targetHp);
+      dollFx(other(ev.side), ev.target, (ev.crit ? "💥" : "") + "-" + ev.dmg,
+             ev.crit ? "#fbbf24" : "#f87171", "d" + g);
+      if (ft <= 1) {
+        impactAt(other(ev.side), ev.target, g >= 2);
+        dollAnim(other(ev.side), "jolt" + dir, 200);
+        shake(ft === 0 ? (g >= 3 ? 3 : g) : (g >= 2 ? 1 : 0));
+      }
+    }, contact);
+    const stop = ft === 0 ? [0, 25, 55, 75][g] : ft === 1 ? [0, 0, 30, 40][g] : 0;   // 顿帧
+    return contact + stop;
   }
+  if (t === "block") {
+    const g = dmgTier(ev);
+    if (ft <= 1) {
+      dollAnim(ev.side, "bounce" + dir, ft === 0 ? 260 : 170);   // 攻击方被弹回
+      partAnim(other(ev.side), ev.blocker, "squashK", 220);      // 格挡手瞬间压缩
+    }
+    AudioFX.play("block", g);
+    setHp(other(ev.side), ev.blocker, ev.blockerHp);
+    dollFx(other(ev.side), ev.blocker, "🛡-" + ev.taken, "#8bd5ff", g >= 2 ? "d1" : "");
+    return ft === 0 && g >= 2 ? 30 : 0;
+  }
+  if (t === "dodge") {   // 侧滑闪身:不闪白、不屏震——和命中读感完全区分
+    if (ft <= 1) {
+      dollAnim(ev.side, "atk" + dir, ft === 0 ? 220 : 140);
+      dollAnim(other(ev.side), "slip" + dir, ft === 0 ? 260 : 160);
+    }
+    AudioFX.play("dodge", 0);
+    dollFx(other(ev.side), view[other(ev.side)]._torso, "💨", "#8bd5ff", "", false);
+    return 0;
+  }
+  if (t === "break") {
+    AudioFX.play("break", 0);
+    debrisFly(ev.side, ev.part, ft);   // 先克隆飞散(带原色),再把原件置灰
+    dollKill(ev.side, ev.part);
+    dollFx(ev.side, ev.part, "💀", "#f87171", "d2");
+    if (ft <= 1) {
+      impactAt(ev.side, ev.part, true);
+      shake(ft === 0 ? 3 : 2);
+      return ft === 0 ? 90 : 45;   // 击破长顿帧
+    }
+    return 0;
+  }
+  if (t === "stunned") {
+    AudioFX.play("stun", 0);
+    if (ft <= 1) dollAnim(ev.side, "wobbleK", 420);
+    dollFx(ev.side, view[ev.side]._torso, "💫眩晕", "#fbbf24", "d1", false);
+    return 0;
+  }
+  if (t === "stun_set") {
+    dollFx(ev.side, view[ev.side]._torso, "⚡头被毁!", "#fbbf24", "d1", false);
+    return 0;
+  }
+  if (t === "no_command") {
+    dollFx(ev.side, ev.part, "🚫", "#9b93b8", "", false);
+    return 0;
+  }
+  return 0;
+}
+function applyInstant(ev) {   // 瞬间挡:只应用状态,零特效
+  if (ev.type === "hit") setHp(other(ev.side), ev.target, ev.targetHp);
+  else if (ev.type === "block") setHp(other(ev.side), ev.blocker, ev.blockerHp);
+  else if (ev.type === "break") dollKill(ev.side, ev.part);
 }
 
 // ===== 战役教学提示(Akun 2026-07-15 教学点设计:按战斗事件触发)=====
@@ -630,6 +870,8 @@ function checkTutorial(ev) {
 let curSeed = null, curCamp = null;
 function startBattle(seed, campLevel) {
   clearTimeout(playTimer);
+  clearFx();
+  AudioFX.ensure();   // 在用户点击手势内解锁 AudioContext(移动端 autoplay 政策)
   tutFired = new Set();
   curSeed = seed == null ? Math.floor(Math.random() * 1e9) : seed;
   curCamp = campLevel || null;
@@ -646,19 +888,32 @@ function startBattle(seed, campLevel) {
   const evs = rep.events;
   let i = 0;
   const step = () => {
-    if (i >= evs.length) return finish(rep);
-    if (speedMs === 0) {
-      for (; i < evs.length; i++) { const l = evLine(evs[i]); if (l) logLine(l[0], l[1]); checkTutorial(evs[i]); applyEv(evs[i], false); }
-      return finish(rep);
+    if (i >= evs.length) return finishSeq(rep);
+    if (speedMs === 0) {   // 瞬间挡:清掉在途特效,直接铺完
+      clearFx();
+      for (; i < evs.length; i++) { const l = evLine(evs[i]); if (l) logLine(l[0], l[1]); checkTutorial(evs[i]); applyInstant(evs[i]); }
+      return finishSeq(rep);
     }
     const ev = evs[i++];
     const l = evLine(ev);
     if (l) logLine(l[0], l[1]);
     checkTutorial(ev);
-    applyEv(ev, true);
-    playTimer = setTimeout(step, l ? speedMs : 0);
+    const extra = playEv(ev, fxTier());              // 前摇/顿帧占用的额外时长
+    const beat = Math.round(speedMs * (BEAT[ev.type] != null ? BEAT[ev.type] : .5));
+    playTimer = setTimeout(step, (l ? beat : Math.min(beat, 60)) + extra);
   };
   step();
+}
+function finishSeq(rep) {   // 终结时刻:败方坍倒、胜方定格,再出结果——消掉"面板突然弹出"的程序感
+  if (rep.winner !== "draw") AudioFX.play(rep.winner === "A" ? "win" : "lose", 0);
+  const ft = speedMs === 0 ? 3 : fxTier();
+  if (ft <= 1 && rep.winner !== "draw") {
+    const d = $("doll" + (rep.winner === "A" ? "B" : "A") + "In");
+    if (d) d.classList.add("defeat");
+    playTimer = setTimeout(() => finish(rep), ft === 0 ? 550 : 350);
+  } else {
+    finish(rep);
+  }
 }
 function finish(rep) {
   const bn = $("banner");
@@ -684,6 +939,8 @@ function finish(rep) {
 }
 $("startBtn").onclick = () => startBattle();
 $("rematch").onclick = () => startBattle(null, curCamp);
+$("muteBtn").textContent = AudioFX.muted ? "🔇" : "🔊";
+$("muteBtn").onclick = () => { $("muteBtn").textContent = AudioFX.toggle() ? "🔇" : "🔊"; };
 
 renderBuild();
 </script>
