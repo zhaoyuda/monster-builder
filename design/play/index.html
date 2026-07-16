@@ -106,6 +106,18 @@
   .dpart.deco { border-style: dashed; opacity: .8; }
   .dpart .eye { position: absolute; top: 7px; left: 6px; width: 5px; height: 5px; border-radius: 50%; background: #14121f; box-shadow: 9px 0 0 #14121f; }
   .dpart.dead { filter: grayscale(1); opacity: .3; transform: rotate(22deg) translateY(5px); }
+  /* 零件图纸偶:有图的零件用 PNG(parts-side-v1),没图的沿用色块兜底 */
+  .dpart.art { background: none; border: none; box-shadow: none; border-radius: 0; }
+  .dpart.art img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+  .dpart.art.head { width: 36px; height: 36px; }
+  .dpart.art.hand { width: 32px; height: 32px; }
+  .dpart.art.leg  { width: 24px; height: 38px; }
+  .dpart.art.torso{ width: 84px; height: 76px; }
+  .dpart.art.tail { width: 36px; height: 24px; transform: none; }
+  .dpart.art img.spore { filter: hue-rotate(115deg) saturate(.9); }   /* 芽孢长出来的手:复用本体图调绿 */
+  .doll.faceL .dpart.art img { transform: scaleX(-1); }               /* 图全部朝右画,右侧怪兽翻面对峙 */
+  @keyframes hitflashArt { 0% { filter: brightness(2.4) contrast(1.3) saturate(.2) drop-shadow(0 0 4px rgba(255,255,255,.9)); } 100% {} }
+  .dpart.art.hitfx { animation: hitflashArt .3s; }                    /* 透明 PNG 用发光代替方框描边 */
   /* —— 事件视觉语法(E=向右/我方出手,W=向左/敌方出手)—— */
   @keyframes atkE { 0%{transform:none} 30%{transform:translateX(-7px)} 55%{transform:translateX(20px)} 72%{transform:translateX(20px)} 100%{transform:none} }
   @keyframes atkW { 0%{transform:none} 30%{transform:translateX(7px)} 55%{transform:translateX(-20px)} 72%{transform:translateX(-20px)} 100%{transform:none} }
@@ -152,7 +164,7 @@
 <div class="wrap">
   <header>
     <h1>🦖 手搓大怪兽</h1>
-    <span style="color:var(--dim);font-size:13px">Demo v0.5 · 机制零件与插件</span>
+    <span style="color:var(--dim);font-size:13px">Demo v0.6 · 零件图上身</span>
     <a href="../">← 设计 wiki</a>
   </header>
 
@@ -357,6 +369,19 @@ function statStr(n) {
 function monster() { return E.makeMonster("我的怪兽", build); }
 
 // ===== 纸偶渲染:怪兽长相 = 配装记录 =====
+// 零件图映射(第一批侧视 v1)。⚠️ 对应关系按画廊页 Yuda 的建议先行换装、待 Akun 拍板——他改画廊页表格后,同步只动这张表。
+const ART_BASE = "../assets/parts-side-v1/";
+const PART_ART = {
+  新手头: "head/head_01.png", 喷火头: "head/head_02.png", 肿头: "head/head_03.png",
+  猛头: "head/head_04.png", 顶撞头: "head/head_05.png",
+  有些肌肉的躯干: "torso/torso_01.png", 新手躯干: "torso/torso_02.png", 稍微长大的躯干: "torso/torso_05.png",
+  新手手: "arm/arm_01.png", 猛爪: "arm/arm_02.png", 长有芽孢的手: "arm/arm_03.png",
+  强力爪: "arm/arm_04.png", 抓握手: "arm/arm_05.png",
+  芽孢长出来的手: "arm/arm_03.png",   // 暂无专图:复用本体图 + CSS 调绿
+  新手腿: "leg/leg_01.png", 灵活的腿: "leg/leg_02.png", 踢腿: "leg/leg_03.png",
+  鞭腿: "leg/leg_04.png", 猛腿: "leg/leg_05.png",
+  新手尾巴: "tail/tail_01.png", 猛尾: "tail/tail_02.png",
+};
 function partHue(name) {
   let h = 0;
   for (const ch of name) h = (h * 31 + ch.codePointAt(0)) % 360;
@@ -368,8 +393,13 @@ function partColor(p) {
 }
 function dollPartHTML(p, sideKey) {
   const deco = p.name.startsWith("装饰") ? " deco" : "";
-  const eye = p.kind === "head" ? '<i class="eye"></i>' : "";
   const key = p.kind === "torso" ? p.name : E.label(p);
+  const art = PART_ART[p.name];
+  if (art) {
+    const spore = p.name === "芽孢长出来的手" ? ' class="spore"' : "";
+    return `<div class="dpart art ${p.kind}${deco}" data-dk="${sideKey}|${key}" title="${key}"><img src="${ART_BASE}${art}" alt="${key}" draggable="false"${spore}></div>`;
+  }
+  const eye = p.kind === "head" ? '<i class="eye"></i>' : "";
   return `<div class="dpart ${p.kind}${deco}" data-dk="${sideKey}|${key}" title="${key}" style="background:${partColor(p)}">${eye}</div>`;
 }
 function dollHTML(m, sideKey) {
@@ -378,7 +408,7 @@ function dollHTML(m, sideKey) {
   const half = Math.ceil(hands.length / 2);
   const tails = m.tails.map((p) => dollPartHTML(p, sideKey)).join("");
   const legs = m.legs.map((p) => dollPartHTML(p, sideKey)).join("");
-  return `<div class="doll" id="doll${sideKey}In">
+  return `<div class="doll${sideKey === "B" ? " faceL" : ""}" id="doll${sideKey}In">
     <div class="drow">${heads || ""}</div>
     <div class="drow dmid">${hands.slice(0, half).join("")}${dollPartHTML(m.torso, sideKey)}${hands.slice(half).join("")}${tails}</div>
     <div class="drow">${legs}</div>
@@ -999,7 +1029,9 @@ function sporeGrow(sideKey, newLabel, hp) {
   if (d) {
     d.setAttribute("data-dk", `${sideKey}|${newLabel}`);
     d.classList.remove("dead", "hitfx");
-    d.style.background = partColor({ name: "芽孢长出来的手", kind: "hand" });
+    const img = d.querySelector("img");
+    if (img) img.classList.add("spore");   // 有零件图:本体图调绿表示重生体
+    else d.style.background = partColor({ name: "芽孢长出来的手", kind: "hand" });
   }
 }
 function applyInstant(ev) {   // 瞬间挡:只应用状态,零特效
