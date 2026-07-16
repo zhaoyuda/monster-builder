@@ -63,5 +63,6 @@ nav:
       - 2026-07-15 新零件表验证: sim-reports/2026-07-15-新零件表验证.md
       - 2026-07-15 机制引擎上线: sim-reports/2026-07-15-机制引擎.md
   - 🎨 零件图(第一批): assets/parts-side-v1.md
+  - 📦 素材上传指南: assets/README.md
   - 🎮 试玩 Demo: https://zhaoyuda.github.io/monster-builder/play/index.html
   - 📝 改文档指南: 给Akun的改文档指南.md
