@@ -1,0 +1,42 @@
+{
+  "pack": "monster_parts_side_v1",
+  "canvas": [1254, 1254],
+  "view": "strict_side_facing_right",
+  "categories": {
+    "head": [
+      {"file": "head/head_01.png", "name": "cyclops_brute"},
+      {"file": "head/head_02.png", "name": "classic_dragon"},
+      {"file": "head/head_03.png", "name": "hammer_eye_mutant"},
+      {"file": "head/head_04.png", "name": "eyeless_maw"},
+      {"file": "head/head_05.png", "name": "ram_snail_crusher"}
+    ],
+    "torso": [
+      {"file": "torso/torso_01.png", "name": "barrel_brute"},
+      {"file": "torso/torso_02.png", "name": "ribbed_belly"},
+      {"file": "torso/torso_03.png", "name": "plated_hunchback"},
+      {"file": "torso/torso_04.png", "name": "sinewy_runner"},
+      {"file": "torso/torso_05.png", "name": "bloated_brood"}
+    ],
+    "arm": [
+      {"file": "arm/arm_01.png", "name": "basic_claw"},
+      {"file": "arm/arm_02.png", "name": "giant_crab_pincer"},
+      {"file": "arm/arm_03.png", "name": "tentacle_claw"},
+      {"file": "arm/arm_04.png", "name": "bone_club_fist"},
+      {"file": "arm/arm_05.png", "name": "lanky_grasper"}
+    ],
+    "leg": [
+      {"file": "leg/leg_01.png", "name": "stout_claw_foot"},
+      {"file": "leg/leg_02.png", "name": "digitigrade_hunter"},
+      {"file": "leg/leg_03.png", "name": "horned_hoof"},
+      {"file": "leg/leg_04.png", "name": "insectile_flesh_stilt"},
+      {"file": "leg/leg_05.png", "name": "pillar_stomper"}
+    ],
+    "tail": [
+      {"file": "tail/tail_01.png", "name": "basic_taper"},
+      {"file": "tail/tail_02.png", "name": "dragon_scorpion"},
+      {"file": "tail/tail_03.png", "name": "bone_club"},
+      {"file": "tail/tail_04.png", "name": "whip_spine"},
+      {"file": "tail/tail_05.png", "name": "finned_swimmer"}
+    ]
+  }
+}
