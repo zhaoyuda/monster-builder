@@ -2,6 +2,23 @@
 
 这个文件夹放游戏素材(零件图、图标、音效等)。上传后素材会自动跟着 wiki 一起发布,设计文档和试玩 demo 都能直接引用。
 
+## 目录结构(按"批次 / 部位"两级分类)
+
+```
+assets/
+  parts-side-v1/          ← 零件图第一批(侧视),画廊见 wiki「🎨 零件图」页
+    head/    头 ×5
+    torso/   躯干 ×5
+    arm/     手/臂 ×5
+    leg/     腿 ×5
+    tail/    尾 ×5
+    asset_manifest.json    每张图的代号清单
+  (将来:parts-side-v2/、connectors/ 颈部连接件、ui/ 界面图标、audio/ 音效……)
+```
+
+- 上传零件图时**放进对应部位的子文件夹**(进到子文件夹里再点 Upload files);新批次开新的 `parts-side-v2/`,不覆盖旧图
+- 图先传上来就行,和零件表的对应关系去 wiki「🎨 零件图」页的表格里填
+
 ## 怎么上传(GitHub 网页,不用装任何东西)
 
 1. 打开这个文件夹的 GitHub 页面:仓库 → `design` → `assets`
