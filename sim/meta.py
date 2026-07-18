@@ -55,6 +55,32 @@ def apply_variant(variant):
         for name, s in CATALOG.items():
             if s.get("kind") == "hand" and s.get("price", 0) > 0:
                 s["price"] = round(s["price"] * 1.25)
+    # —— 腿灭绝专项(2026-07-18):腿在所有既往变体前十平均 0.0-0.4,找哪个杠杆能救回来 ——
+    elif variant == "init_once":
+        return RuleConfig(initiative_mode="once")      # W2 遗留 A/B:先攻只掷一次,先手更值钱
+    elif variant == "dodge_all":
+        return RuleConfig(dodge_leg_slots=99)          # 全部腿都提供闪避(现行只有腿1、腿2)
+    elif variant == "legmob":
+        # 机动性免费:腿价回落到纯公式价(10*攻+2*血),先攻/闪避溢价 40/30 清零
+        for name, s in CATALOG.items():
+            if s.get("kind") == "leg" and s.get("price", 0) > 0 and not name.startswith("装饰"):
+                s["price"] = 10 * s.get("atk", 0) + 2 * s.get("hp", 0)
+    elif variant == "leg50":
+        # 清算价探针:腿半价——如果这样腿还进不了前十,问题就不在价格层
+        for name, s in CATALOG.items():
+            if s.get("kind") == "leg" and s.get("price", 0) > 0 and not name.startswith("装饰"):
+                s["price"] = round(s["price"] * 0.5)
+    elif variant == "leg_hunt":
+        # 结构修法:腿的索敌 腿→手(打光回退默认)。边际对照里踢腿 0.4%→38%,双踢腿 44.9%
+        for name, s in CATALOG.items():
+            if s.get("kind") == "leg" and s.get("atk", 0) > 0:
+                s["hunts"] = "hand"
+    elif variant == "leg_fix":
+        # 组合:腿打手 + 机动溢价清零(温和降价)——结构修法之后价格才有意义
+        for name, s in CATALOG.items():
+            if s.get("kind") == "leg" and s.get("price", 0) > 0 and not name.startswith("装饰"):
+                s["hunts"] = "hand"
+                s["price"] = 10 * s.get("atk", 0) + 2 * s.get("hp", 0)
     return RuleConfig()
 
 
@@ -165,7 +191,8 @@ def comp_stats(specs):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="baseline",
-                    choices=["baseline", "muscle2", "atk15", "hand125", "combo", "mech"])
+                    choices=["baseline", "muscle2", "atk15", "hand125", "combo", "mech",
+                             "init_once", "dodge_all", "legmob", "leg50", "leg_hunt", "leg_fix"])
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
 
@@ -185,7 +212,7 @@ def main():
         for _ in range(STAGE1_GAMES):
             j = rng.randrange(n - 1)
             j = j if j < i else j + 1
-            rep = battle(mons[i], mons[j], seed=battle_id)
+            rep = battle(mons[i], mons[j], seed=battle_id, cfg=cfg)
             battle_id += 1
             wins[i] += 1.0 if rep["winner"] == "A" else (0.5 if rep["winner"] == "draw" else 0.0)
     order = sorted(range(n), key=lambda i: -wins[i])
@@ -198,10 +225,10 @@ def main():
             if a >= b:
                 continue
             for g in range(STAGE2_GAMES // 2):
-                rep = battle(mons[a], mons[b], seed=battle_id); battle_id += 1
+                rep = battle(mons[a], mons[b], seed=battle_id, cfg=cfg); battle_id += 1
                 score[a] += 1.0 if rep["winner"] == "A" else (0.5 if rep["winner"] == "draw" else 0.0)
                 score[b] += 1.0 if rep["winner"] == "B" else (0.5 if rep["winner"] == "draw" else 0.0)
-                rep = battle(mons[b], mons[a], seed=battle_id); battle_id += 1
+                rep = battle(mons[b], mons[a], seed=battle_id, cfg=cfg); battle_id += 1
                 score[b] += 1.0 if rep["winner"] == "A" else (0.5 if rep["winner"] == "draw" else 0.0)
                 score[a] += 1.0 if rep["winner"] == "B" else (0.5 if rep["winner"] == "draw" else 0.0)
     games_each = (TOP_N - 1) * STAGE2_GAMES
