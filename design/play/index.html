@@ -92,9 +92,27 @@
   .lv .blockmsg { font-size: 12px; color: var(--bad); margin-top: 6px; }
   .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; background: var(--acc2); color: #fff; padding: 12px 18px; border-radius: 12px; font-weight: 700; z-index: 99; box-shadow: 0 8px 30px rgba(0,0,0,.5); display: none; max-width: 90vw; }
   .lock { opacity: .45; }
-  /* 纸偶怪兽 */
-  .stage { display: flex; justify-content: space-around; align-items: flex-end; padding: 10px 4px 14px; min-height: 150px; background: radial-gradient(ellipse at 50% 120%, #241f38 0%, transparent 70%); border-radius: 12px; position: relative; overflow: hidden; }
-  .doll { display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
+  /* 纸偶怪兽 + 战场氛围(纯 CSS 布景,将来可整体换成 Akun 的背景图) */
+  .stage { display: flex; justify-content: space-around; align-items: flex-end; padding: 10px 4px 20px; min-height: 168px; border-radius: 12px; position: relative; overflow: hidden;
+    background:
+      radial-gradient(ellipse at 50% 118%, rgba(124, 58, 237, .16) 0%, transparent 55%),
+      linear-gradient(180deg, #14112a 0%, #1a1533 55%, #241f38 100%); }
+  .stage::before { /* 远山剪影 */ content: ""; position: absolute; left: 0; right: 0; bottom: 18px; height: 54px; z-index: 0; pointer-events: none; opacity: .85;
+    background:
+      radial-gradient(100px 46px at 10% 100%, #1c1734 60%, transparent 61%),
+      radial-gradient(150px 62px at 36% 100%, #181330 60%, transparent 61%),
+      radial-gradient(120px 50px at 66% 100%, #1c1734 60%, transparent 61%),
+      radial-gradient(160px 66px at 94% 100%, #181330 60%, transparent 61%); }
+  .stage::after { /* 地面 */ content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 18px; z-index: 0; pointer-events: none;
+    background: linear-gradient(180deg, #2a2346, #1f1a38); border-top: 1px solid rgba(167, 139, 250, .22); }
+  .doll { display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; z-index: 1; }
+  .doll::before { /* 脚下投影 */ content: ""; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); width: 78%; height: 10px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(50% 50% at 50% 50%, rgba(0, 0, 0, .5), transparent 70%); }
+  /* 待机呼吸:整只轻微起伏,双方错拍;出手动画(inline style)期间自动让位,倒地停 */
+  @keyframes breatheK { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.024) scaleX(.994); } }
+  .doll { transform-origin: 50% 100%; animation: breatheK 3.2s ease-in-out infinite; }
+  #dollB .doll { animation-delay: -1.6s; }
+  .doll.defeat { animation: none; }
   .drow { display: flex; gap: 4px; align-items: flex-end; justify-content: center; }
   .dmid { align-items: center; }
   .dpart { position: relative; border: 2px solid rgba(0,0,0,.45); box-shadow: inset 0 -5px rgba(0,0,0,.22), inset 0 3px rgba(255,255,255,.14); transition: opacity .4s, filter .4s; }
@@ -154,9 +172,32 @@
   .debris { position: absolute; pointer-events: none; z-index: 5; transition: transform .35s cubic-bezier(.2,.7,.4,1), opacity .4s; }
   .debris.rest { filter: grayscale(1); opacity: .45; }
   .buildStage { display: flex; justify-content: center; padding: 8px 0 4px; }
+  /* 开场 VS 报幕(瞬间挡不放) */
+  .vswrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; z-index: 9; pointer-events: none; background: rgba(10, 8, 20, .38); }
+  .vswrap.out { animation: vsOutK .22s forwards; }
+  .vsname { font-size: 14px; font-weight: 900; max-width: 36%; text-align: center; text-shadow: 0 1px 4px #000; }
+  .vsname.L { color: #a5f3a5; animation: vsInL .3s cubic-bezier(.2,.8,.3,1) both; }
+  .vsname.R { color: #fca5a5; animation: vsInR .3s cubic-bezier(.2,.8,.3,1) both; }
+  .vsmark { font-size: 30px; font-weight: 900; font-style: italic; color: #fbbf24; -webkit-text-stroke: 1px #6b3f00; text-shadow: 0 0 16px rgba(251,191,36,.55); animation: vsPopK .38s cubic-bezier(.2,.8,.3,1.25) .12s both; }
+  @keyframes vsInL { from { transform: translateX(-38px); opacity: 0; } to {} }
+  @keyframes vsInR { from { transform: translateX(38px); opacity: 0; } to {} }
+  @keyframes vsPopK { 0% { transform: scale(2.4); opacity: 0; } 60% { transform: scale(.92); opacity: 1; } 100% { transform: scale(1); } }
+  @keyframes vsOutK { to { opacity: 0; } }
+  /* 结算画面:舞台上盖一枚"图章",banner 照旧保留 */
+  .resultfx { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; z-index: 9; pointer-events: none; }
+  .resultfx .stamp { font-size: 30px; font-weight: 900; letter-spacing: .18em; text-indent: .18em; padding: 4px 18px; border: 3px solid; border-radius: 10px; background: rgba(10, 8, 20, .55); transform: rotate(-6deg); animation: stampK .45s cubic-bezier(.2,.8,.3,1.25) both; }
+  .resultfx.win .stamp { color: var(--ok); border-color: var(--ok); text-shadow: 0 0 18px rgba(74, 222, 128, .55); }
+  .resultfx.lose .stamp { color: var(--bad); border-color: var(--bad); text-shadow: 0 0 18px rgba(248, 113, 113, .55); }
+  .resultfx.draw .stamp { color: var(--warn); border-color: var(--warn); transform: rotate(0); animation-name: stampD; }
+  .resultfx .sub { font-size: 11px; color: var(--dim); text-shadow: 0 1px 3px #000; animation: subInK .4s .25s both; }
+  @keyframes stampK { 0% { transform: rotate(-6deg) scale(2.1); opacity: 0; } 60% { transform: rotate(-6deg) scale(.95); opacity: 1; } 100% { transform: rotate(-6deg) scale(1); } }
+  @keyframes stampD { 0% { transform: scale(2.1); opacity: 0; } 60% { transform: scale(.95); opacity: 1; } 100% { transform: scale(1); } }
+  @keyframes subInK { from { opacity: 0; transform: translateY(4px); } to {} }
   @media (prefers-reduced-motion: reduce) {
     .stage.shk1, .stage.shk2, .stage.shk3 { animation: none; }
     .debris { transition: opacity .3s; }
+    .doll { animation: none; }
+    .vsname.L, .vsname.R, .vsmark, .resultfx .stamp, .resultfx .sub { animation: none; }
   }
 </style>
 </head>
@@ -164,7 +205,7 @@
 <div class="wrap">
   <header>
     <h1>🦖 手搓大怪兽</h1>
-    <span style="color:var(--dim);font-size:13px">Demo v0.6 · 零件图上身</span>
+    <span style="color:var(--dim);font-size:13px">Demo v0.7 · 战场氛围与结算</span>
     <a href="../">← 设计 wiki</a>
   </header>
 
@@ -428,7 +469,7 @@ function later(fn, ms) {
 function clearFx() {
   for (const t of fxTimers) clearTimeout(t);
   fxTimers.clear();
-  document.querySelectorAll(".fxlabel, .impact, .debris").forEach((n) => n.remove());
+  document.querySelectorAll(".fxlabel, .impact, .debris, .vswrap, .resultfx").forEach((n) => n.remove());
   const st = document.querySelector("#pgFight .stage");
   if (st) st.classList.remove("shk1", "shk2", "shk3");
   for (const k of ["A", "B"]) {
@@ -1090,6 +1131,7 @@ function startBattle(seed, campLevel) {
   const rep = E.battle(specA, specB, curSeed);
   const evs = rep.events;
   let i = 0;
+  const vsMs = showVS(a.name, b.name);   // 开场报幕;瞬间挡/减动效返回 0
   const step = () => {
     if (i >= evs.length) return finishSeq(rep);
     if (speedMs === 0) {   // 瞬间挡:清掉在途特效,直接铺完
@@ -1105,7 +1147,35 @@ function startBattle(seed, campLevel) {
     const beat = Math.round(speedMs * (BEAT[ev.type] != null ? BEAT[ev.type] : .5));
     playTimer = setTimeout(step, (l ? beat : Math.min(beat, 60)) + extra);
   };
-  step();
+  if (vsMs > 0) playTimer = setTimeout(step, vsMs);
+  else step();
+}
+function showVS(na, nb) {   // 开场 VS 报幕:两侧名牌滑入 + VS 弹出,时长随速度挡压缩
+  if (speedMs === 0 || REDUCED) return 0;
+  const st = document.querySelector("#pgFight .stage");
+  if (!st) return 0;
+  const dur = speedMs >= 600 ? 1150 : speedMs >= 280 ? 900 : 480;
+  const w = document.createElement("div");
+  w.className = "vswrap";
+  const mk = (cls, txt) => { const s = document.createElement("span"); s.className = cls; s.textContent = txt; return s; };
+  w.append(mk("vsname L", na), mk("vsmark", "VS"), mk("vsname R", nb));
+  st.appendChild(w);
+  later(() => { w.classList.add("out"); later(() => w.remove(), 240); }, dur - 200);
+  return dur;
+}
+function resultSplash(winner, rep) {   // 结算图章:盖在舞台上,下一局开打时随 clearFx 清掉
+  const st = document.querySelector("#pgFight .stage");
+  if (!st) return;
+  const w = document.createElement("div");
+  w.className = "resultfx " + (winner === "A" ? "win" : winner === "B" ? "lose" : "draw");
+  const stamp = document.createElement("span");
+  stamp.className = "stamp";
+  stamp.textContent = winner === "A" ? "胜利" : winner === "B" ? "战败" : "平局";
+  const sub = document.createElement("span");
+  sub.className = "sub";
+  sub.textContent = `${rep.rounds} 回合 · seed ${curSeed}`;
+  w.append(stamp, sub);
+  st.appendChild(w);
 }
 function finishSeq(rep) {   // 终结时刻:败方坍倒、胜方定格,再出结果——消掉"面板突然弹出"的程序感
   if (rep.winner !== "draw") AudioFX.play(rep.winner === "A" ? "win" : "lose", 0);
@@ -1123,6 +1193,7 @@ function finish(rep) {
   if (rep.winner === "A") { bn.textContent = "🎉 我的怪兽 获胜!"; bn.className = "banner win"; }
   else if (rep.winner === "B") { bn.textContent = `💀 被 ${rep.winnerName} 击败(共 ${rep.rounds} 回合)`; bn.className = "banner lose"; }
   else { bn.textContent = "🤝 平局"; bn.className = "banner draw"; }
+  resultSplash(rep.winner, rep);
   logLine(rep.winner === "A" ? "🎉 胜利!" : rep.winner === "B" ? "💀 战败…" : "🤝 平局", "win");
   // 战役结算
   if (curCamp && rep.winner === "A") {
