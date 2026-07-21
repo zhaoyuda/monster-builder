@@ -205,7 +205,7 @@
 <div class="wrap">
   <header>
     <h1>🦖 手搓大怪兽</h1>
-    <span style="color:var(--dim);font-size:13px">Demo v0.7 · 战场氛围与结算</span>
+    <span style="color:var(--dim);font-size:13px">Demo v0.8 · 称霸荒野(骨架)</span>
     <a href="../">← 设计 wiki</a>
   </header>
 
@@ -223,6 +223,7 @@
       <div id="lvCards"></div>
       <div style="margin-top:10px"><button class="btn ghost" id="resetCamp" style="font-size:12px">🗑 重置战役进度</button></div>
     </div>
+    <div class="card" id="wildCard"></div>
   </div>
 
   <!-- 装配页 -->
@@ -762,7 +763,7 @@ $("goFight").onclick = () => showTab("fight");
 // ===== 战役 =====
 function enemySummary(spec) {
   const m = E.makeMonster("", spec);
-  return E.allParts(m).map((p) => {
+  return [...E.allParts(m), ...m.tails].map((p) => {
     const bits = [p.kind !== "torso" ? p.name : p.name];
     const st = [];
     if (p.atk) st.push(`攻${p.atk}${p.hits > 1 ? "×" + p.hits : ""}`);
@@ -798,11 +799,134 @@ function renderCampaign() {
       ${open && block ? `<div class="blockmsg">${block}</div>` : ""}
     </div>`;
   }).join("");
+  renderWild();
 }
 window.campFight = (lv) => {
   const l = E.CAMPAIGN.find((x) => x.lv === lv);
   showTab("fight");
   startBattle(null, l);
+};
+
+// ===== 称霸荒野(冒险 run 骨架 v1)=====
+// ⚠️ 工程默认(待 Akun):关数/预算曲线/奖励额;中途怪取自 2026-07-21 Boss 候选池报告的带内候选
+//    (对同档玩家 43-51%),Boss=报告标定带内变体(弟斯拉 80%/新栗欧克 66%/银刚 67%)。
+//    中途怪名字是占位文案,Akun 随时改;插件三选一/怪癖词缀(Q18 补充二 a/b)等拍板后接入。
+const WILD_START_BIO = 800;
+const WILD_STAGES = [
+  { name: "荒野 1", reward: 300, pool: [
+    { n: "残尾独爪兽", s: { torso: "新手躯干", hands: ["猛爪"], tails: ["猛尾"] } },
+    { n: "小小怪", s: { torso: "新手躯干", heads: ["新手头"], hands: ["新手手"] } },
+    { n: "蹒跚爬行者", s: { torso: "新手躯干", hands: ["小手手"], legs: ["新手腿"] } },
+    { n: "无头踢踢", s: { torso: "新手躯干", legs: ["新手腿", "踢腿"] } },
+  ] },
+  { name: "荒野 2", reward: 300, pool: [
+    { n: "利爪甩尾兽", s: { torso: "稍微长大的躯干", hands: ["强力爪"], tails: ["新手尾巴"] } },
+    { n: "肿头跳蚤", s: { torso: "新手躯干", heads: ["肿头"], legs: ["新手腿"] } },
+    { n: "双掌怪", s: { torso: "稍微长大的躯干", hands: ["小手手", "新手手"] } },
+    { n: "充能小猎手", s: { torso: "新手躯干", torsoPlugin: "普通能量核心", heads: ["新手头"], hands: ["猛爪"] } },
+  ] },
+  { name: "荒野 3", reward: 300, pool: [
+    { n: "耐火三爪魔", s: { torso: "新手躯干", torsoPlugin: "耐火皮肤",
+        hands: [{ name: "强力爪", plugin: "撕裂爪" }, { name: "强力爪", plugin: "骨盾" }, "猛爪"], tails: ["新手尾巴"] } },
+    { n: "撕咬双腿兽", s: { torso: "新手躯干", torsoPlugin: "普通能量核心", heads: ["猛头"], legs: ["新手腿", "鞭腿"] } },
+    { n: "角质独头龙", s: { torso: "稍微长大的躯干", heads: [{ name: "猛头", plugin: "头顶角质层" }] } },
+    { n: "壮硕小拳王", s: { torso: "有些肌肉的躯干", heads: [{ name: "新手头", plugin: "头顶角质层" }],
+        hands: ["小手手", "新手手"], tails: ["猛尾"] } },
+  ] },
+  { name: "荒野 4", reward: 300, pool: [
+    { n: "猛袭者", s: { torso: "有些肌肉的躯干", heads: ["猛头"], hands: ["强力爪"], legs: ["猛腿"] } },
+    { n: "再生猛爪怪", s: { torso: "稍微长大的躯干", heads: ["猛头"], hands: [{ name: "猛爪", plugin: "胶质瘤" }] } },
+    { n: "双尖刺头兽", s: { torso: "有些肌肉的躯干", slots: ["头部插槽"],
+        heads: [{ name: "猛头", plugin: "头顶尖刺" }, { name: "肿头", plugin: "头顶尖刺" }] } },
+    { n: "亢奋踢腿魔", s: { torso: "新手躯干", torsoPlugin: "普通能量核心",
+        heads: [{ name: "顶撞头", plugin: "头顶尖刺" }], legs: ["踢腿", { name: "鞭腿", plugin: "肾上腺素" }] } },
+  ] },
+  { name: "荒野 5", reward: 300, pool: [
+    { n: "四腿角质暴徒", s: { torso: "稍微长大的躯干",
+        heads: [{ name: "新手头", plugin: "头顶角质层" }], hands: ["强力爪"], legs: ["猛腿", "猛腿", "鞭腿"] } },
+    { n: "抓握狂人", s: { torso: "有些肌肉的躯干", heads: [{ name: "新手头", plugin: "头顶角质层" }],
+        hands: ["强力爪", "抓握手"], legs: ["灵活的腿", "鞭腿"] } },
+    { n: "喷火三腿蜥", s: { torso: "有些肌肉的躯干", heads: ["喷火头"], hands: ["新手手"],
+        legs: ["新手腿", "猛腿", "猛腿"] } },
+    { n: "灵巧肿头怪", s: { torso: "稍微长大的躯干", heads: ["肿头"], hands: ["小手手", "新手手"],
+        legs: ["灵活的腿", "灵活的腿"] } },
+  ] },
+  { name: "关底 Boss", reward: 0, boss: true, pool: [
+    { n: "弟斯拉", s: { torso: "有些肌肉的躯干", torsoPlugin: "耐火皮肤", heads: ["喷火头"],
+        hands: ["猛爪", "猛爪"], legs: ["猛腿"], tails: ["猛尾"] } },
+    { n: "新栗欧克", s: { torso: "有些肌肉的躯干", slots: ["头部插槽", "头部插槽"],
+        heads: ["肿头", "肿头", "顶撞头"], legs: ["新手腿"] } },
+    { n: "银刚", s: { torso: "有些肌肉的躯干", torsoPlugin: "尖刺皮肤", heads: ["猛头"],
+        hands: ["强力爪", "强力爪", { name: "抓握手", plugin: "骨盾" }] } },
+  ] },
+];
+const wildUnlocked = () => clearedSet().has(3);
+function newWildRun() {
+  return { stage: 0, bio: WILD_START_BIO, over: false,
+           picks: WILD_STAGES.map((st) => Math.floor(Math.random() * st.pool.length)) };
+}
+const wildEnemy = (w) => WILD_STAGES[w.stage].pool[w.picks[w.stage]];
+function wildBlockReason() {
+  const m = monster();
+  const errs = E.validate(m);
+  if (errs.length) return errs[0];
+  if (E.priceTotal(m) > save.wild.bio) return `🧬 配装 ${E.priceTotal(m)} 超出本轮生物质 ${save.wild.bio}——去「装配」页精简`;
+  return null;
+}
+function renderWild() {
+  const box = $("wildCard");
+  if (!box) return;
+  if (!wildUnlocked()) {
+    box.innerHTML = `<h2>🏔 称霸荒野</h2><div class="hint">🔒 通关第 3 关解锁——出了教学关,对手就都是大小怪兽了。</div>`;
+    return;
+  }
+  const w = save.wild;
+  if (!w) {
+    box.innerHTML = `<h2>🏔 称霸荒野</h2>
+      <div class="hint">连战 ${WILD_STAGES.length} 场:五只荒野怪 + 一只关底 Boss。<b>轻装开局</b>:本轮生物质从 ${WILD_START_BIO} 起,打赢一场加一笔,死了免费重开(每轮对手随机)。</div>
+      <div style="margin-top:8px"><button class="btn primary" onclick="wildStart()">🏔 开始称霸荒野</button></div>`;
+    return;
+  }
+  const done = w.stage >= WILD_STAGES.length;
+  const dots = WILD_STAGES.map((st, i) =>
+    `<span style="opacity:${i < w.stage ? 1 : .35}">${st.boss ? "👑" : "⚔️"}</span>`).join(" ");
+  if (done) {
+    box.innerHTML = `<h2>🏔 称霸荒野</h2><div style="font-size:15px">${dots}</div>
+      <div class="hint">🏆 <b>你称霸了这片荒野!</b>(奖励线等 Akun 的收集/解锁设计接入)</div>
+      <div style="margin-top:8px"><button class="btn primary" onclick="wildStart()">🔁 重新开荒(对手重抽)</button></div>`;
+    return;
+  }
+  if (w.over) {
+    box.innerHTML = `<h2>🏔 称霸荒野</h2><div style="font-size:15px">${dots}</div>
+      <div class="hint">💀 你的怪兽倒在了 ${WILD_STAGES[w.stage].name}……荒野不同情失败者,但允许重来。</div>
+      <div style="margin-top:8px"><button class="btn primary" onclick="wildStart()">🔁 免费重开</button></div>`;
+    return;
+  }
+  const st = WILD_STAGES[w.stage];
+  const e = wildEnemy(w);
+  const block = wildBlockReason();
+  box.innerHTML = `<h2>🏔 称霸荒野 · ${st.name}</h2>
+    <div style="font-size:15px">${dots}</div>
+    <div class="hint">🧬 本轮生物质:<b>${save.wild.bio}</b>(当前配装 ${E.priceTotal(monster())})${st.boss ? " · <b>⚠️ 关底 Boss</b>" : ""}</div>
+    <div class="enemy">👿 <b>${e.n}</b>:${enemySummary(Object.assign({ name: e.n }, e.s))}</div>
+    <div class="st">🎁 打赢:+${st.reward || "通关"} 生物质</div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn primary" onclick="wildFight()" ${block ? "disabled" : ""}>⚔️ 开战</button>
+      <button class="btn ghost" onclick="showTab('build')">🔧 调整配装</button>
+      <button class="btn ghost" onclick="wildAbort()">🏳 放弃本轮</button>
+    </div>
+    ${block ? `<div class="blockmsg">${block}</div>` : ""}`;
+}
+window.wildStart = () => { save.wild = newWildRun(); persist(); renderCampaign(); };
+window.wildAbort = () => {
+  if (!confirm("放弃本轮进度,重抽对手?")) return;
+  save.wild = null; persist(); renderCampaign();
+};
+window.wildFight = () => {
+  const w = save.wild;
+  const st = WILD_STAGES[w.stage], e = wildEnemy(w);
+  showTab("fight");
+  startBattle(null, { wild: true, name: `${st.name}·${e.n}`, enemy: e.s, reward: st.reward });
 };
 $("resetCamp").onclick = () => {
   if (!confirm("重置战役进度和配装?")) return;
@@ -1195,6 +1319,30 @@ function finish(rep) {
   else { bn.textContent = "🤝 平局"; bn.className = "banner draw"; }
   resultSplash(rep.winner, rep);
   logLine(rep.winner === "A" ? "🎉 胜利!" : rep.winner === "B" ? "💀 战败…" : "🤝 平局", "win");
+  // 称霸荒野结算(每个 curCamp 只结算一次,防"再战"刷奖励;平局按失败算——荒野不同情平局)
+  if (curCamp && curCamp.wild) {
+    if (!curCamp.settled && save.wild && !save.wild.over) {
+      curCamp.settled = true;
+      const w = save.wild;
+      if (rep.winner === "A") {
+        w.bio += curCamp.reward;
+        w.stage++;
+        if (w.stage >= WILD_STAGES.length) {
+          toast("🏆 称霸荒野!你就是这片大地最横的怪兽");
+          logLine("🏆 你打倒了关底 Boss,称霸荒野!回「战役」页可以重新开荒。", "win");
+        } else {
+          const ne = wildEnemy(w);
+          logLine(`🎁 +${curCamp.reward} 生物质(本轮共 ${w.bio});下一战:${WILD_STAGES[w.stage].name}·${ne.n}——回「战役」页应战,先去「装配」页花掉新预算。`, "win");
+        }
+      } else {
+        w.over = true;
+        logLine("💀 倒在荒野……本轮结束。回「战役」页免费重开(对手重抽)。", "");
+      }
+      persist();
+      renderCampaign();
+    }
+    return;
+  }
   // 战役结算
   if (curCamp && rep.winner === "A") {
     if (!clearedSet().has(curCamp.lv)) {
