@@ -35,6 +35,8 @@ class RuleConfig:
     crit_mult: float = 2.0               # 暴击伤害倍率(Akun 定了各头暴击率,倍率暂 2x;1.0=关闭暴击)
     block_overflow: bool = False         # 格挡溢出提案(耗材手流修法A,待 Akun):格挡手血量不够时,
                                          #   吃不下的伤害继续打原目标——废掉"1血手吞整发重击"
+    status_slots: str = "multi"          # multi=异常状态可共存(现行) / single=每部件仅一个状态栏位,
+                                         #   新状态顶掉旧状态(Akun Q19b 候选方案,A/B 用)
 
 
 @dataclass
@@ -173,16 +175,31 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
             if not killer.alive():   # 级联:被炸死的部件照常走击破结算
                 handle_break(round_no, killer, killer_key, None, vic_key)
 
+    def fireproof_side(key):
+        """耐火皮肤保护全身(Akun 2026-07-21 批注 Q19d):躯干挂耐火 → 全队火伤减半+免疫灼烧。"""
+        t = sides[key].torso
+        return t.plugin == "耐火皮肤" and t.alive()
+
+    def set_burn(part, val):
+        part.burn = val
+        if cfg.status_slots == "single":   # 单状态栏位:新状态顶掉旧状态(Q19b A/B)
+            part.tear = None
+
+    def set_tear(part, val):
+        part.tear = val
+        if cfg.status_slots == "single":
+            part.burn = None
+
     def after_damage(round_no, attacker: Part, atk_key, victim: Part, def_key, dmg):
         """命中造成伤害后的状态施加(灼烧/撕裂/碎骨锥/尖刺皮肤)。挂给实际受伤者(含格挡手)。"""
         if dmg <= 0:
             return
-        if attacker.fire and victim.alive() and victim.plugin != "耐火皮肤":
-            victim.burn = dict(left=BURN_ROUNDS, src=attacker, src_key=atk_key)
+        if attacker.fire and victim.alive() and not fireproof_side(def_key):
+            set_burn(victim, dict(left=BURN_ROUNDS, src=attacker, src_key=atk_key))
             log(round_no, "status", side=def_key, part=victim.label, status="burn",
                 rounds=BURN_ROUNDS, by=attacker.label)
         if attacker.plugin == "撕裂爪" and victim.alive():
-            victim.tear = dict(left=PLUGINS["撕裂爪"]["tear_rounds"], src=attacker, src_key=atk_key)
+            set_tear(victim, dict(left=PLUGINS["撕裂爪"]["tear_rounds"], src=attacker, src_key=atk_key))
             log(round_no, "status", side=def_key, part=victim.label, status="tear",
                 rounds=PLUGINS["撕裂爪"]["tear_rounds"], by=attacker.label)
         if attacker.plugin == "碎骨锥" and victim.alive() and victim.kind != "torso":
@@ -190,7 +207,7 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
                 victim.stun_part_next = True
                 log(round_no, "part_stun_set", side=def_key, part=victim.label, by=attacker.label)
         if victim.kind == "torso" and victim.plugin == "尖刺皮肤" and attacker.alive():
-            attacker.tear = dict(left=PLUGINS["尖刺皮肤"]["tear_rounds"], src=victim, src_key=def_key)
+            set_tear(attacker, dict(left=PLUGINS["尖刺皮肤"]["tear_rounds"], src=victim, src_key=def_key))
             log(round_no, "status", side=atk_key, part=attacker.label, status="tear",
                 rounds=PLUGINS["尖刺皮肤"]["tear_rounds"], by=victim.label)
 
@@ -270,8 +287,8 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
                 if not target.alive():
                     handle_break(round_no, target, def_key, attacker, atk_key)
             return
-        # 3) 正常结算(E6 即时死亡;耐火皮肤:宿主躯干火焰伤害减半)
-        fireproof = attacker.fire and target.plugin == "耐火皮肤" and dmg > 0
+        # 3) 正常结算(E6 即时死亡;耐火皮肤护全身:火焰伤害减半,Akun Q19d 批注)
+        fireproof = attacker.fire and fireproof_side(def_key) and dmg > 0
         if fireproof:
             dmg = max(1, math.floor(dmg * 0.5))
         target.hp -= dmg

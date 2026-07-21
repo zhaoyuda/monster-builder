@@ -244,9 +244,15 @@
       }
     }
 
+    // 耐火皮肤护全身(Akun 2026-07-21 批注 Q19d):躯干挂耐火 → 全队火伤减半+免疫灼烧
+    function fireproofSide(key) {
+      const t = sides[key].torso;
+      return t.plugin === "耐火皮肤" && alive(t);
+    }
+
     function afterDamage(round, attacker, atkKey, victim, defKey, dmg) {
       if (dmg <= 0) return;
-      if (attacker.fire && alive(victim) && victim.plugin !== "耐火皮肤") {
+      if (attacker.fire && alive(victim) && !fireproofSide(defKey)) {
         victim.burn = { left: BURN_ROUNDS, src: attacker, srcKey: atkKey };
         log(round, "status", { side: defKey, part: label(victim), status: "burn",
           rounds: BURN_ROUNDS, by: label(attacker) });
@@ -339,8 +345,8 @@
         }
         return;
       }
-      // 3) 正常结算(E6;耐火皮肤:宿主躯干火焰伤害减半)
-      const fireproof = attacker.fire && target.plugin === "耐火皮肤" && dmg > 0;
+      // 3) 正常结算(E6;耐火皮肤护全身:火焰伤害减半,Akun Q19d 批注)
+      const fireproof = attacker.fire && fireproofSide(defKey) && dmg > 0;
       if (fireproof) dmg = Math.max(1, Math.floor(dmg * 0.5));
       target.hp -= dmg;
       log(round, "hit", { side: atkKey, attacker: label(attacker), target: label(target),

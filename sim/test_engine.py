@@ -392,6 +392,28 @@ class TestMechanics(unittest.TestCase):
         self.assertFalse(self._events(rep, "status"), "耐火宿主不应被灼烧")
         self.assertFalse(self._events(rep, "dot_tick"))
 
+    def test_耐火皮肤_保护全身(self):
+        """Akun Q19d 批注(2026-07-21):耐火皮肤保护范围=全身,非仅躯干。"""
+        a = mkp("A", heads=["喷火头"])
+        b = mkp("B", torso_plugin="耐火皮肤", hands=["猛爪"])
+        # A先(0.0);A头目标0.9→打躯干;额外目标=choice→B猛爪(手也应减半+免灼烧)
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.0, 0.9]))
+        hits = self._events(rep, "hit", side="A")
+        self.assertEqual(len(hits), 2)
+        self.assertTrue(all(h["fireproof"] for h in hits), "耐火应护到非躯干部件")
+        self.assertFalse(self._events(rep, "status", status="burn"), "全身免疫灼烧")
+
+    def test_单状态栏位_新顶旧(self):
+        """Q19b A/B:status_slots=single 时撕裂顶掉灼烧,不共存。"""
+        a = mkp("A", heads=["喷火头"], hands=[("猛爪", "撕裂爪")])
+        b = mkp("B", torso="稍微长大的躯干")
+        cfg = RuleConfig(round_limit=1, status_slots="single")
+        # A先(0.0);猛爪打躯干挂撕裂;头目标0.9→躯干挂灼烧(顶掉撕裂);额外目标choice→无其他部件
+        rep = battle(a, b, cfg=cfg, rng=ScriptRNG([0.0, 0.9]))
+        ticks = self._events(rep, "dot_tick")
+        self.assertEqual(len(ticks), 1, "单栏位:只剩最后挂上的状态在跳")
+        self.assertEqual(ticks[0]["status"], "burn", "灼烧后挂,顶掉撕裂")
+
     # ---- 撕裂爪 / 尖刺皮肤 ----
     def test_撕裂爪_减2攻且命中挂撕裂(self):
         a = mkp("A", hands=[("猛爪", "撕裂爪")])

@@ -81,6 +81,10 @@ def apply_variant(variant):
             if s.get("kind") == "leg" and s.get("price", 0) > 0 and not name.startswith("装饰"):
                 s["hunts"] = "hand"
                 s["price"] = 10 * s.get("atk", 0) + 2 * s.get("hp", 0)
+    elif variant == "mech_status1":
+        # Q19b A/B(Akun 2026-07-21 反问):异常状态单栏位(新顶旧) vs 共存(现行)
+        # 采样池同 mech(插件挂载),规则改 status_slots=single
+        return RuleConfig(status_slots="single")
     return RuleConfig()
 
 
@@ -192,13 +196,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="baseline",
                     choices=["baseline", "muscle2", "atk15", "hand125", "combo", "mech",
-                             "init_once", "dodge_all", "legmob", "leg50", "leg_hunt", "leg_fix"])
+                             "init_once", "dodge_all", "legmob", "leg50", "leg_hunt", "leg_fix",
+                             "mech_status1"])
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
 
     cfg = apply_variant(args.variant)
     rng = random.Random(args.seed)
-    mech = args.variant == "mech"
+    mech = args.variant in ("mech", "mech_status1")
     specs = dedupe([gen_spec(rng, mech) for _ in range(SAMPLE)])
     mons = [build(s) for s in specs]
     n = len(specs)
