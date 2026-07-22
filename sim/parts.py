@@ -75,11 +75,15 @@ CATALOG = {
     "鞭腿":     dict(kind="leg",  atk=8,  hp=40,  energy=10, initiative=2, dodge=0.05, price=200),
     "灵活的腿": dict(kind="leg",  atk=4,  hp=60,  energy=10, initiative=2, dodge=0.07, price=200),  # 原「粗腿」,Akun 2026-07-15 改名
     "踢腿":     dict(kind="leg",  atk=10, hp=50,  energy=10, initiative=0, dodge=0.0,  price=200),
+    "闪避腿":   dict(kind="leg",  atk=8,  hp=45,  energy=10, initiative=2, dodge=0.12, price=200),  # Akun 2026-07-22 第二批(纯数值件)
     # 躯干(供能来源,血空即败;command=基础指挥点——无头时的"脊髓反射"底线)
     # Akun 2026-07-15 拍板:基础指挥 2/3/3,价格按新公式(1供能=5价)350/700/700,供能 30/60/80
     "新手躯干":       dict(kind="torso", atk=0, hp=100, supply=30, command=2, price=350),
     "稍微长大的躯干": dict(kind="torso", atk=0, hp=200, supply=60, command=3, price=700),
     "有些肌肉的躯干": dict(kind="torso", atk=0, hp=150, supply=80, command=3, price=700),
+    # Akun 2026-07-22 第二批(053a9a0)。⚠️ 臃肿的躯干基础指挥 4 触碰敏感参数(无头流),入库即探针
+    "强能躯干":       dict(kind="torso", atk=0, hp=145, supply=90, command=3, price=750),
+    "臃肿的躯干":     dict(kind="torso", atk=0, hp=300, supply=60, command=4, price=850),
     # 尾巴(独立位不占四肢槽,Q9 暂限 1;E8:不可被攻击)
     "新手尾巴": dict(kind="tail", atk=0, hp=0, initiative=1, price=20),
     "猛尾":     dict(kind="tail", atk=0, hp=0, initiative=2, price=40),

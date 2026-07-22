@@ -1,4 +1,4 @@
-<img width="398" height="20" alt="image" src="https://github.com/user-attachments/assets/05b50fef-9ae0-4a2f-b0ac-aad59d32155d" /># 系统A · 装配(零件表)
+# 系统A · 装配(零件表)
 
 > 本页数据来源:Akun 的《零件表》(v2)。原始 Excel 归档于 `design/_source/零件表-原始稿.xlsx`。
 >

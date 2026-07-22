@@ -85,6 +85,10 @@ def apply_variant(variant):
         # Q19b A/B(Akun 2026-07-21 反问):异常状态单栏位(新顶旧) vs 共存(现行)
         # 采样池同 mech(插件挂载),规则改 status_slots=single
         return RuleConfig(status_slots="single")
+    elif variant == "batch2a":
+        # Akun 2026-07-22 第二批纯数值件探针:新躯干×2(⚠️ 臃肿指挥4=敏感参数)+ 闪避腿
+        TORSOS.extend(["强能躯干", "臃肿的躯干"])
+        LEGS.append("闪避腿")
     return RuleConfig()
 
 
@@ -219,7 +223,7 @@ def main():
     ap.add_argument("--variant", default="baseline",
                     choices=["baseline", "muscle2", "atk15", "hand125", "combo", "mech",
                              "init_once", "dodge_all", "legmob", "leg50", "leg_hunt", "leg_fix",
-                             "mech_status1"])
+                             "mech_status1", "batch2a"])
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
 
