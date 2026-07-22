@@ -20,7 +20,22 @@ class Part:
     crit: float = 0.0  # 暴击率(仅对本部件自己的攻击生效;Akun 2026-07-07 拍板,倍率暂 2x)
     hits: int = 1      # 每回合攻击次数(猛犸象头"双击"=2;每次独立结算目标/闪避/格挡)
     hunts: str = ""    # 目标偏好(Q15 机制件原型):"hand"=优先打对方存活的手,打光回退本类默认规则
-    fire: bool = False   # 喷火头:火焰伤害,额外随机攻击 1 个目标,造成伤害则挂"灼烧"(Q17a)
+    # ---- 伤害类型与第二批机制(Akun 2026-07-22 零件表;实现细则=Q22)----
+    dtype: str = "phys"      # 伤害类型:phys/fire/poison/ice(词条表;耐性皮肤/属性尾巴按类型减伤)
+    extra_target: bool = False  # 喷火头/喷冰头:额外随机攻击 1 个目标(避开主目标)
+    aoe_pos: bool = False    # 喷毒头:攻击除躯干外随机 1 个部位的所有部件,无目标则打躯干(Q22c)
+    noblock: bool = False    # 该部件的攻击不可被格挡(三喷头/尾巴上的头,Q22a)
+    freeze_prob: float = 0.0  # 喷冰头:命中后冻结概率(冻结=该部件 1 回合不行动,Q22e)
+    stretch: bool = False    # 伸缩头:奇数回合造成/受到伤害 ×1.25,偶数 ×0.75(直接攻击,Q22f)
+    charge: bool = False     # 蓄力头/蓄力拳:奇数回合不攻击(不耗指挥),偶数回合必暴击(Q22g)
+    afterimage: bool = False  # 残像拳:与自己上次攻击目标相同 → 必暴击(Q22h)
+    tentacle: bool = False   # 触手:战吼缠绕(开战随机缠敌方非躯干件,双方 5 回合停手停格挡+每回合 5 伤,Q22j)
+    tail_head: bool = False  # 尾巴上的头:骑尾巴占其插件位,头阶段最后行动,算头(眩晕/目标池),Q22i
+    revenge_head: bool = False  # 高鞭腿:被打中后下一次攻击改打敌方头(一次性,Q22k)
+    combo3: bool = False     # 连环腿:同目标连打 3 段,全中再补 1 段,整体耗 1 指挥(Q22l)
+    sticky: bool = False     # 黏腿:命中(未被闪避)锁定目标,被闪避或目标死亡才重选(Q22m)
+    shock: bool = False      # 震撼腿:命中后敌方全队闪避 -5%,2 回合刷新不叠加(Q22n)
+    fire: bool = False   # (兼容旧字段)喷火头=dtype fire+extra_target;新代码请用 dtype
     grab: bool = False   # 抓握手:第一次命中不造成伤害,敌方 5 回合闪避为 0
     spore: bool = False  # 长有芽孢的手:被击破后留芽孢标记,空 2 回合长出"芽孢长出来的手"(Q17b)
     derived: bool = False  # 衍生部件(芽孢长出来的手):不可直接装配,只能战斗中长出
@@ -31,6 +46,12 @@ class Part:
     # ---- 以下为战斗运行时状态,battle() 内部维护,装配时不用管 ----
     burn: dict = None      # 灼烧 {"left": 剩余回合, "src": 来源部件}(每回合掉 2 部件血,刷新不叠加)
     tear: dict = None      # 撕裂 同上(撕裂爪 5 回合 / 尖刺皮肤 2 回合)
+    poison: dict = None    # 中毒 {"left", "dmg", "atkdown", "src", "src_key"}(掉血+降攻,刷新不叠加)
+    last_target: object = None   # 残像拳:上一次攻击的目标
+    revenge_pending: bool = False  # 高鞭腿:被击中标记,下次攻击改打头
+    lock_target: object = None   # 黏腿:锁定中的目标
+    entangled_left: int = 0      # 触手缠绕剩余回合(>0 时不能攻击/格挡)
+    entangle_partner: object = None  # 缠绕配对的另一方部件
     stun_part_next: bool = False   # 碎骨锥:下回合本部件不能行动(与整队眩晕叠加只算眩晕,Q17d)
     stunned_part: bool = False
     grab_used: bool = False        # 抓握手的"第一次攻击"是否已命中(闪避掉不消耗)
@@ -55,9 +76,19 @@ CATALOG = {
     "猛头":     dict(kind="head", atk=20, hp=100, energy=20, command=2, crit=0.08, price=400),
     "顶撞头":   dict(kind="head", atk=25, hp=75,  energy=20, command=2, crit=0.10, price=400),
     "肿头":     dict(kind="head", atk=15, hp=125, energy=20, command=3, crit=0.06, price=400),
-    # 喷火头(Q17a):无法暴击(crit=0),火焰伤害,额外随机攻击 1 个目标,
+    # 喷火头(Q17a + Akun 2026-07-22 补:先攻-1、无法格挡):火焰伤害,额外随机攻击 1 个目标,
     #   对受到伤害的目标挂"灼烧"(2 点/回合 ×3 回合,已灼烧则刷新)
-    "喷火头":   dict(kind="head", atk=15, hp=100, energy=30, command=2, crit=0.0, fire=True, price=550),
+    "喷火头":   dict(kind="head", atk=15, hp=100, energy=30, command=2, crit=0.0, price=550,
+                     fire=True, dtype="fire", extra_target=True, noblock=True, initiative=-1),
+    # ---- 第二批头(Akun 2026-07-22,细则 Q22)----
+    "喷毒头":   dict(kind="head", atk=14, hp=100, energy=30, command=2, crit=0.0, price=550,
+                     dtype="poison", aoe_pos=True, noblock=True, initiative=-1),
+    "喷冰头":   dict(kind="head", atk=15, hp=100, energy=30, command=2, crit=0.0, price=550,
+                     dtype="ice", extra_target=True, noblock=True, freeze_prob=0.25, initiative=-1),
+    "伸缩头":   dict(kind="head", atk=20, hp=100, energy=20, command=2, crit=0.08, price=400, stretch=True),
+    "蓄力头":   dict(kind="head", atk=20, hp=100, energy=20, command=2, crit=0.0,  price=400, charge=True),
+    "尾巴上的头": dict(kind="head", atk=19, hp=100, energy=20, command=1, crit=0.10, price=400,
+                       tail_head=True, noblock=True),
     # 手(攻防平衡,可格挡)
     "新手手":   dict(kind="hand", atk=5,  hp=25,  energy=5,  price=100),
     "猛爪":     dict(kind="hand", atk=10, hp=50,  energy=10, price=200),
@@ -69,6 +100,11 @@ CATALOG = {
     #   空 2 个回合后长出"芽孢长出来的手"
     "长有芽孢的手":   dict(kind="hand", atk=7, hp=30, energy=10, spore=True, price=250),
     "芽孢长出来的手": dict(kind="hand", atk=8, hp=30, energy=10, derived=True, price=0),
+    # ---- 第二批手(Akun 2026-07-22,细则 Q22)----
+    "刺拳手":   dict(kind="hand", atk=5,  hp=50, energy=10, hits=2, price=200),
+    "触手":     dict(kind="hand", atk=5,  hp=65, energy=10, tentacle=True, price=210),
+    "蓄力拳":   dict(kind="hand", atk=10, hp=55, energy=10, charge=True, price=200),
+    "残像拳":   dict(kind="hand", atk=8,  hp=45, energy=10, afterimage=True, price=210),
     # 腿(提供先攻/闪避;踢腿无先攻无闪避,按 Q6 拍板为故意)
     "新手腿":   dict(kind="leg",  atk=3,  hp=20,  energy=5,  initiative=1, dodge=0.05, price=100),
     "猛腿":     dict(kind="leg",  atk=6,  hp=50,  energy=10, initiative=2, dodge=0.05, price=200),
@@ -76,6 +112,11 @@ CATALOG = {
     "灵活的腿": dict(kind="leg",  atk=4,  hp=60,  energy=10, initiative=2, dodge=0.07, price=200),  # 原「粗腿」,Akun 2026-07-15 改名
     "踢腿":     dict(kind="leg",  atk=10, hp=50,  energy=10, initiative=0, dodge=0.0,  price=200),
     "闪避腿":   dict(kind="leg",  atk=8,  hp=45,  energy=10, initiative=2, dodge=0.12, price=200),  # Akun 2026-07-22 第二批(纯数值件)
+    # ---- 第二批机制腿(Akun 2026-07-22,细则 Q22)----
+    "高鞭腿":   dict(kind="leg",  atk=10, hp=40,  energy=10, initiative=2, dodge=0.05, price=200, revenge_head=True),
+    "连环腿":   dict(kind="leg",  atk=3,  hp=45,  energy=10, initiative=2, dodge=0.05, price=200, combo3=True),
+    "黏腿":     dict(kind="leg",  atk=8,  hp=50,  energy=10, initiative=2, dodge=0.05, price=200, sticky=True),
+    "震撼腿":   dict(kind="leg",  atk=7,  hp=50,  energy=10, initiative=2, dodge=0.05, price=200, shock=True),
     # 躯干(供能来源,血空即败;command=基础指挥点——无头时的"脊髓反射"底线)
     # Akun 2026-07-15 拍板:基础指挥 2/3/3,价格按新公式(1供能=5价)350/700/700,供能 30/60/80
     "新手躯干":       dict(kind="torso", atk=0, hp=100, supply=30, command=2, price=350),
@@ -119,6 +160,15 @@ PLUGINS = {
     "碎骨锥":     dict(pos=("leg",),  price=40, stun_prob=0.5),       # 宿主腿命中后 50% 使被击中部件下回合不能行动
     "尖刺皮肤":   dict(pos=("torso",), price=30, tear_rounds=2),      # 宿主(躯干)受伤时,对攻击部件挂撕裂 2/回合 ×2
     "普通能量核心": dict(pos=("torso",), price=100, supply=20),       # 供能 +20
+    # ---- 第二批插件(Akun 2026-07-22,细则 Q22)----
+    "耐毒皮肤":   dict(pos=("torso",), price=50),                     # 毒素伤害 -50%,免疫中毒(全身,Q22q)
+    "耐冰皮肤":   dict(pos=("torso",), price=50),                     # 冰冻伤害 -50%,免疫冻结(全身,Q22q)
+    "火蜥蜴尾巴": dict(pos=("tail",), price=40, burn_bonus=2),        # 全队灼烧+2/回合;全身火伤 -20%;与尾巴头互斥
+    "毒蛇尾巴":   dict(pos=("tail",), price=40, poison_bonus=1),      # 全队中毒+1/回合、降攻+1;全身毒伤 -20%;互斥同上
+    "冰虫尾巴":   dict(pos=("tail",), price=40, freeze_bonus=0.15, initiative=1),  # 冻结+15%、先攻+1;冰伤-20%;互斥同上
+    "先守后攻":   dict(pos=("leg",),  price=25),                      # 指向宿主腿的攻击被闪避后,该腿立即反击 1 次(Q22o)
+    "头槌":       dict(pos=("head",), price=50, atk_delta=4),         # 宿主头 +4 攻
+    "认真一拳":   dict(pos=("hand",), price=30, crit_mult_bonus=0.5), # 宿主手暴击倍率 2.0→2.5(Q22p)
 }
 
 

@@ -348,7 +348,7 @@ def mkp(name="M", torso="新手躯干", torso_plugin="", heads=(), hands=(), leg
                    heads=[_mk(n, i) for i, n in enumerate(heads)],
                    hands=[_mk(n, i) for i, n in enumerate(hands)],
                    legs=[_mk(n, i) for i, n in enumerate(legs)],
-                   tails=[make(n, i + 1) for i, n in enumerate(tails)])
+                   tails=[_mk(n, i) for i, n in enumerate(tails)])
 
 
 class TestMechanics(unittest.TestCase):
@@ -575,6 +575,206 @@ class TestMechanics(unittest.TestCase):
         self.assertIn(rep1["winner"], ("A", "B", "draw"))
         self.assertEqual(rep1["winner"], rep2["winner"])
         self.assertEqual(len(rep1["events"]), len(rep2["events"]))
+
+
+class PickRNG(ScriptRNG):
+    """choice() 也按脚本弹出(给定每次选择的下标),用于黏腿锁定这类要区分'选'与'锁'的测试。"""
+
+    def __init__(self, randoms=(), picks=()):
+        super().__init__(randoms)
+        self.picks = list(picks)
+
+    def choice(self, seq):
+        return seq[self.picks.pop(0)] if self.picks else seq[0]
+
+
+class TestBatch2(unittest.TestCase):
+    """Akun 2026-07-22 第二批零件(053a9a0);实现细则=05 页 Q22(Yuda 拍,两周无异议默认生效)。"""
+
+    def _events(self, rep, etype, **match):
+        return [e for e in rep["events"] if e["type"] == etype
+                and all(e.get(k) == v for k, v in match.items())]
+
+    def test_喷毒头_部位AOE与中毒降攻(self):
+        a = mkp("A", heads=["喷毒头"])
+        b = mkp("B", torso="稍微长大的躯干", hands=["猛爪", "小手手"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2), rng=ScriptRNG([0.9]))
+        hits_a = self._events(rep, "hit", side="A")
+        self.assertEqual({h["target"] for h in hits_a if h["round"] == 1},
+                         {"猛爪(手1)", "小手手(手2)"}, "应打'手'部位的全部部件")
+        self.assertEqual(len(self._events(rep, "status", status="poison", round=1)), 2)
+        ticks = self._events(rep, "dot_tick", status="poison")
+        self.assertTrue(ticks and all(t["dmg"] == 3 for t in ticks))
+        r2 = [h for h in self._events(rep, "hit", side="B") if h["round"] == 2 and h["attacker"] == "猛爪(手1)"]
+        self.assertTrue(r2 and r2[0]["dmg"] == 9, "中毒降攻:猛爪 10-1=9")
+
+    def test_耐毒皮肤_减半且免疫(self):
+        a = mkp("A", heads=["喷毒头"])
+        b = mkp("B", torso_plugin="耐毒皮肤", hands=["猛爪"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.9]))
+        hit = self._events(rep, "hit", side="A")[0]
+        self.assertEqual(hit["dmg"], 7, "floor(14×0.5)=7")
+        self.assertEqual(hit["resist"], "poison")
+        self.assertFalse(self._events(rep, "status", status="poison"))
+
+    def test_喷冰头_额外目标与冻结(self):
+        a = mkp("A", heads=["喷冰头"])
+        b = mkp("B", torso="稍微长大的躯干", hands=["猛爪"])
+        # randoms: 先攻0.0→A;头目标0.9→躯干;额外目标=choice猛爪,冻结掷0.1<0.25
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2), rng=ScriptRNG([0.0, 0.9, 0.1, 0.0, 0.9]))
+        self.assertTrue(self._events(rep, "status", status="freeze", part="猛爪(手1)"))
+        self.assertTrue(self._events(rep, "part_stunned", part="猛爪(手1)"),
+                        "冻结的部件下回合不行动")
+
+    def test_伸缩头_奇偶伤害双向(self):
+        a = mkp("A", torso="稍微长大的躯干", heads=["伸缩头"])
+        b = mkp("B", torso="稍微长大的躯干", heads=["新手头"])
+        # R1: init0.0→A;A头目标0.3→打头,暴击掷0.9;B头目标0.3→打头(新手头 crit0 无掷)
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2),
+                     rng=ScriptRNG([0.0, 0.3, 0.9, 0.3, 0.0, 0.3, 0.9, 0.3]))
+        a1 = [h for h in self._events(rep, "hit", side="A") if h["round"] == 1][0]
+        self.assertEqual(a1["dmg"], 25, "奇数回合造成 floor(20×1.25)=25")
+        b1 = [h for h in self._events(rep, "hit", side="B") if h["round"] == 1][0]
+        self.assertEqual(b1["dmg"], 12, "奇数回合伸缩头受到 floor(10×1.25)=12")
+        a2 = [h for h in self._events(rep, "hit", side="A") if h["round"] == 2][0]
+        self.assertEqual(a2["dmg"], 15, "偶数回合造成 floor(20×0.75)=15")
+
+    def test_蓄力头_奇蓄力偶必暴(self):
+        a = mkp("A", heads=["蓄力头"])
+        b = mkp("B", torso="稍微长大的躯干")
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2), rng=ScriptRNG([0.0, 0.0, 0.9]))
+        self.assertTrue(self._events(rep, "charging", part="蓄力头(头1)", round=1))
+        self.assertFalse([h for h in self._events(rep, "hit", side="A") if h["round"] == 1])
+        h2 = [h for h in self._events(rep, "hit", side="A") if h["round"] == 2][0]
+        self.assertTrue(h2["crit"] and h2["dmg"] == 40, "偶数回合必暴击 20×2=40")
+
+    def test_残像拳_同目标必暴击(self):
+        a = mkp("A", hands=["残像拳"])
+        b = mkp("B", torso="稍微长大的躯干", hands=["小手手", "小手手"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2), rng=ScriptRNG([0.0, 0.0]))
+        a1 = [h for h in self._events(rep, "hit", side="A") if h["round"] == 1][0]
+        self.assertFalse(a1["crit"])
+        a2 = [h for h in self._events(rep, "hit", side="A") if h["round"] == 2][0]
+        self.assertTrue(a2["crit"] and a2["target"] == a1["target"], "连打同目标第二击必暴")
+        self.assertEqual(a2["dmg"], 16, "8×2=16")
+
+    def test_尾巴头_头阶段最后行动(self):
+        a = mkp("A", torso="稍微长大的躯干", heads=["新手头", "尾巴上的头"])
+        b = mkp("B", torso="稍微长大的躯干", heads=["猛头"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1),
+                     rng=ScriptRNG([0.0, 0.9, 0.9, 0.9, 0.9, 0.9]))
+        order = [h["attacker"] for h in self._events(rep, "hit") if h["round"] == 1]
+        self.assertEqual(order.index("尾巴上的头(头2)"), len(order) - 1,
+                         "尾巴头应在头阶段所有普通头之后行动")
+
+    def test_尾巴头_不可被格挡且破头眩晕(self):
+        a = mkp("A", heads=["尾巴上的头"])
+        b = mkp("B", hands=["猛爪"])
+        # 若可格挡,0.0<0.2 必进格挡分支;noblock 应直接命中躯干
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.0, 0.9, 0.0]))
+        self.assertFalse(self._events(rep, "block"))
+        self.assertTrue([h for h in self._events(rep, "hit", side="A") if h["target"] == "新手躯干"])
+        # 破尾巴头触发全队眩晕(它算头)
+        a2 = mkp("A", heads=["尾巴上的头"])
+        a2.heads[0].hp = 1
+        b2 = mkp("B", heads=["猛头"])
+        rep2 = battle(a2, b2, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.9, 0.3]))
+        self.assertTrue(self._events(rep2, "stun_set", side="A"))
+
+    def test_触手_战吼缠绕与互伤(self):
+        a = mkp("A", hands=["触手"])
+        b = mkp("B", torso="稍微长大的躯干", hands=["猛爪"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.5]))
+        ent = self._events(rep, "entangle")
+        self.assertEqual(len(ent), 1)
+        self.assertEqual(ent[0]["round"], 0)
+        self.assertEqual(ent[0]["target"], "猛爪(手1)")
+        self.assertFalse(self._events(rep, "hit"), "双方唯一的手都被缠住,本回合无人出手")
+        ticks = self._events(rep, "entangle_tick")
+        self.assertEqual(len(ticks), 2, "双方各扣 5")
+        self.assertTrue(all(t["dmg"] == 5 for t in ticks))
+
+    def test_触手_一方死亡另一方解脱(self):
+        a = mkp("A", hands=["触手"])
+        a.hands[0].hp = 3
+        b = mkp("B", torso="稍微长大的躯干", hands=["猛爪"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2), rng=ScriptRNG([0.5, 0.5]))
+        self.assertTrue(self._events(rep, "break", part="触手(手1)"))
+        self.assertTrue(self._events(rep, "entangle_end", part="猛爪(手1)", freed=True))
+        r2 = [h for h in self._events(rep, "hit", side="B") if h["round"] == 2]
+        self.assertTrue(r2, "解脱后猛爪恢复攻击")
+
+    def test_高鞭腿_被击后转打头(self):
+        a = mkp("A", legs=["高鞭腿"])
+        b = mkp("B", torso="稍微长大的躯干", heads=["肿头"], legs=["踢腿"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2), rng=ScriptRNG([0.5, 0.9, 0.5, 0.9]))
+        a2 = [h for h in self._events(rep, "hit", side="A") if h["round"] == 2][0]
+        self.assertEqual(a2["target"], "肿头(头1)", "被打中后下次攻击改打头")
+
+    def test_连环腿_全中补第四段(self):
+        a = mkp("A", legs=["连环腿"])
+        b = mkp("B", torso="稍微长大的躯干", legs=["踢腿"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.5]))
+        hits = [h for h in self._events(rep, "hit", side="A") if h["attacker"] == "连环腿(腿1)"]
+        self.assertEqual(len(hits), 4, "3 段全中 → 补第 4 段")
+
+    def test_连环腿_被闪不补(self):
+        a = mkp("A", legs=["连环腿"])
+        b = mkp("B", torso="稍微长大的躯干", legs=["新手腿"])
+        # 第 1 段被闪(0.0<0.05),其余命中 → 共 3 次尝试,无第 4 段
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.5, 0.0, 0.9, 0.9, 0.9]))
+        tries = ([h for h in self._events(rep, "hit", side="A") if h["attacker"] == "连环腿(腿1)"]
+                 + [d for d in self._events(rep, "dodge", side="A")])
+        self.assertEqual(len(tries), 3)
+
+    def test_黏腿_命中锁定同目标(self):
+        a = mkp("A", legs=["黏腿"])
+        b = mkp("B", torso="稍微长大的躯干", legs=["踢腿", "踢腿"])
+        # choice 脚本:R1 触发选择时取下标 1(踢腿·腿2);R2 若锁定生效则不再发生选择
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2),
+                     rng=PickRNG([0.5, 0.5], picks=[1, 0, 0, 0]))
+        a_hits = [h for h in self._events(rep, "hit", side="A")]
+        self.assertEqual(a_hits[0]["target"], "踢腿(腿2)")
+        self.assertEqual(a_hits[1]["target"], "踢腿(腿2)", "R2 应锁定同目标(未经 choice)")
+
+    def test_震撼腿_降低敌方闪避(self):
+        a = mkp("A", legs=["震撼腿"])
+        b = mkp("B", torso="稍微长大的躯干", legs=["灵活的腿", "新手腿"])
+        # R1 A 命中(0.9)→ 敌方闪避 0.12-0.05=0.07;R2 掷 0.08:无 debuff 会闪,有 debuff 命中
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2),
+                     rng=ScriptRNG([0.3, 0.9, 0.9, 0.9, 0.3, 0.08, 0.9, 0.9]))
+        self.assertTrue(self._events(rep, "status", status="shock"))
+        r2 = [h for h in self._events(rep, "hit", side="A") if h["round"] == 2]
+        self.assertTrue(r2, "0.08 > 0.07:debuff 生效则命中")
+
+    def test_先守后攻_闪避后反击(self):
+        a = mkp("A", legs=["踢腿"])
+        b = mkp("B", torso="稍微长大的躯干", legs=[("新手腿", "先守后攻")])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.5, 0.0]))
+        self.assertTrue(self._events(rep, "dodge", side="A"))
+        counter = [h for h in self._events(rep, "hit", side="B")
+                   if h["attacker"] == "新手腿(腿1)" and h["target"] == "踢腿(腿1)"]
+        self.assertEqual(len(counter), 2, "正常出手 1 次 + 闪避反击 1 次")
+
+    def test_头槌与认真一拳(self):
+        self.assertEqual(make("新手头", 1, "头槌").atk, 14, "头槌 +4 攻")
+        a = mkp("A", hands=[("蓄力拳", "认真一拳")])
+        b = mkp("B", torso="稍微长大的躯干")
+        rep = battle(a, b, cfg=RuleConfig(round_limit=2), rng=ScriptRNG([0.0, 0.0]))
+        h2 = [h for h in self._events(rep, "hit", side="A") if h["round"] == 2][0]
+        self.assertTrue(h2["crit"])
+        self.assertEqual(h2["dmg"], 25, "暴击倍率 2.0+0.5:floor(10×2.5)=25")
+
+    def test_火蜥蜴尾巴_灼烧加成(self):
+        a = mkp("A", heads=["喷火头"], tails=[("新手尾巴", "火蜥蜴尾巴")])
+        b = mkp("B", torso="稍微长大的躯干")
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.5, 0.9]))
+        ticks = self._events(rep, "dot_tick", status="burn")
+        self.assertTrue(ticks and all(t["dmg"] == 4 for t in ticks), "灼烧 2+2=4/回合")
+
+    def test_先攻_喷头减一与冰虫尾巴加一(self):
+        self.assertEqual(mkp("A", heads=["喷火头"]).initiative_total(), -1)
+        self.assertEqual(mkp("A", tails=[("新手尾巴", "冰虫尾巴")]).initiative_total(), 2, "尾巴1+冰虫1")
 
 
 if __name__ == "__main__":
