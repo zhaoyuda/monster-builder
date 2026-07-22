@@ -89,12 +89,23 @@ def apply_variant(variant):
         # Akun 2026-07-22 第二批纯数值件探针:新躯干×2(⚠️ 臃肿指挥4=敏感参数)+ 闪避腿
         TORSOS.extend(["强能躯干", "臃肿的躯干"])
         LEGS.append("闪避腿")
+    elif variant == "batch2":
+        # 第二批全量(机制件+插件都进池;尾巴上的头因需配对尾巴暂不进随机池,单独手测)
+        TORSOS.extend(["强能躯干", "臃肿的躯干"])
+        LEGS.extend(["闪避腿", "高鞭腿", "连环腿", "黏腿", "震撼腿"])
+        MECH_HEADS.extend(["喷毒头", "喷冰头", "伸缩头", "蓄力头"])
+        MECH_HANDS.extend(["刺拳手", "触手", "蓄力拳", "残像拳"])
+        PLUGINS_BY_KIND["head"] = PLUGINS_BY_KIND["head"] + ["头槌"]
+        PLUGINS_BY_KIND["hand"] = PLUGINS_BY_KIND["hand"] + ["认真一拳"]
+        PLUGINS_BY_KIND["leg"] = PLUGINS_BY_KIND["leg"] + ["先守后攻"]
+        PLUGINS_BY_KIND["torso"] = PLUGINS_BY_KIND["torso"] + ["耐毒皮肤", "耐冰皮肤"]
+        PLUGINS_BY_KIND["tail"] = ["火蜥蜴尾巴", "毒蛇尾巴", "冰虫尾巴"]
     return RuleConfig()
 
 
 def _entry(rng, name, kind, mech):
     """按概率给部件挂一个位置合法的插件;返回 "名" 或 (名, 插件)。"""
-    if mech and rng.random() < PLUGIN_PROB:
+    if mech and kind in PLUGINS_BY_KIND and rng.random() < PLUGIN_PROB:
         return (name, rng.choice(PLUGINS_BY_KIND[kind]))
     return name
 
@@ -124,7 +135,8 @@ def gen_spec(rng, mech=False):
                          key=str),
             legs=sorted((_entry(rng, rng.choice(LEGS), "leg", mech) for _ in range(n_legs)),
                         key=str),
-            tails=sorted(rng.choice(TAILS) for _ in range(n_tails)),
+            tails=sorted((_entry(rng, rng.choice(TAILS), "tail", mech) for _ in range(n_tails)),
+                         key=str),
         )
         m = build(spec)
         if m.energy_used() > m.supply_total():
@@ -150,7 +162,7 @@ def build(spec):
         heads=[_mk(n, i) for i, n in enumerate(spec["heads"])],
         hands=[_mk(n, i) for i, n in enumerate(spec["hands"])],
         legs=[_mk(n, i) for i, n in enumerate(spec["legs"])],
-        tails=[make(n, i + 1) for i, n in enumerate(spec["tails"])],
+        tails=[_mk(n, i) for i, n in enumerate(spec["tails"])],   # 尾巴支持插件(属性尾巴,2026-07-22)
         slots=[make(n, i + 1) for i, n in enumerate(slots)],
     )
 
@@ -223,13 +235,13 @@ def main():
     ap.add_argument("--variant", default="baseline",
                     choices=["baseline", "muscle2", "atk15", "hand125", "combo", "mech",
                              "init_once", "dodge_all", "legmob", "leg50", "leg_hunt", "leg_fix",
-                             "mech_status1", "batch2a"])
+                             "mech_status1", "batch2a", "batch2"])
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
 
     cfg = apply_variant(args.variant)
     rng = random.Random(args.seed)
-    mech = args.variant in ("mech", "mech_status1")
+    mech = args.variant in ("mech", "mech_status1", "batch2")
     specs = dedupe([gen_spec(rng, mech) for _ in range(SAMPLE)])
     mons = [build(s) for s in specs]
     n = len(specs)

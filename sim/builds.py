@@ -23,7 +23,7 @@ def build(name, torso, heads=(), hands=(), legs=(), tails=(), slots=(), torso_pl
         heads=[_mk(n, i) for i, n in enumerate(heads)],
         hands=[_mk(n, i) for i, n in enumerate(hands)],
         legs=[_mk(n, i) for i, n in enumerate(legs)],
-        tails=[make(n, i + 1) for i, n in enumerate(tails)],
+        tails=[_mk(n, i) for i, n in enumerate(tails)],   # 尾巴支持插件(属性尾巴,2026-07-22)
         slots=[make(n, i + 1) for i, n in enumerate(slots)],
     )
     validate(m)
@@ -95,6 +95,12 @@ ARCHETYPES = {
                             heads=["喷火头"],
                             hands=[("抓握手", "爆裂腺体"), ("长有芽孢的手", "胶质瘤")],
                             legs=[("新手腿", "碎骨锥")]),
+    # 第二批试验流:Akun 2026-07-22 新零件橱窗(喷毒部位AOE+触手战吼+蓄力+机制腿+属性尾巴)
+    "第二批试验流": lambda: build("第二批试验流", "强能躯干",
+                                  heads=["喷毒头"],
+                                  hands=["触手", ("蓄力拳", "认真一拳")],
+                                  legs=["连环腿", "震撼腿"],
+                                  tails=[("猛尾", "冰虫尾巴")]),
 }
 
 
