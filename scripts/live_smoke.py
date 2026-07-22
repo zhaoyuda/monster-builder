@@ -28,8 +28,9 @@ def main():
     with sync_playwright() as p:
         b = p.chromium.launch()
         page = b.new_page(viewport={"width": 900, "height": 950})
-        errs = []
+        errs, failed_req = [], []
         page.on("pageerror", lambda e: errs.append(str(e)))
+        page.on("requestfailed", lambda r: failed_req.append(r.url))   # 字体/零件图等静态资源
         resp = page.goto(args.url, wait_until="networkidle", timeout=30000)
         check("HTTP 200", resp is not None and resp.status == 200, resp and resp.status)
         page.wait_for_timeout(800)
@@ -42,8 +43,26 @@ def main():
         page.wait_for_timeout(1500)
         banner = page.evaluate("$('banner').textContent")
         check("瞬间挡打完一局出结算", any(s in banner for s in ("获胜", "击败", "平局")), banner[:40])
+        check("无静态资源加载失败", not failed_req, failed_req[:3])
         check("全程无 JS 错误", not errs, errs[:3])
         b.close()
+
+        # 移动端视口(375×667 触屏):页签可点、无横向溢出
+        mb = p.chromium.launch()
+        mpage = mb.new_page(viewport={"width": 375, "height": 667},
+                            user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+                            has_touch=True, is_mobile=True)
+        merrs = []
+        mpage.on("pageerror", lambda e: merrs.append(str(e)))
+        mpage.goto(args.url, wait_until="networkidle", timeout=30000)
+        mpage.wait_for_timeout(600)
+        mpage.tap("#tabBuild")
+        mpage.wait_for_timeout(300)
+        check("移动端:装配页可切换", mpage.evaluate("$('pgBuild').style.display") != "none")
+        overflow = mpage.evaluate("document.documentElement.scrollWidth > window.innerWidth + 2")
+        check("移动端:无横向溢出", not overflow)
+        check("移动端:无 JS 错误", not merrs, merrs[:3])
+        mb.close()
 
     print("\n🎉 线上冒烟通过" if ok else "\n💥 线上有问题,别收工")
     sys.exit(0 if ok else 1)

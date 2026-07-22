@@ -35,6 +35,9 @@ jobs:
       - name: Build site
         run: mkdocs build --strict
 
+      - name: Stamp build sha   # 防"半新半旧"部署:线上可核对本次构建的 commit
+        run: echo "${GITHUB_SHA}" > site/build.txt
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -67,6 +70,10 @@ jobs:
             fi
           done
           # demo 页要包含引擎脚本引用,防止发布了半截页面
-          grep -q "engine.js" /tmp/page || true
           curl -s "${base}play/index.html" | grep -q 'id="tabCamp"' \
             || { echo "::error::play 页内容缺失(tabCamp 不在)"; exit 1; }
+          # 构建号核对:线上 build.txt 必须等于本次 commit(防 CDN 半新半旧 / 部署没生效)
+          live_sha=$(curl -s "${base}build.txt" | tr -d '[:space:]')
+          echo "live build: $live_sha / expect: ${GITHUB_SHA}"
+          [ "$live_sha" = "${GITHUB_SHA}" ] \
+            || { echo "::error::线上构建号不匹配:$live_sha != ${GITHUB_SHA}"; exit 1; }
