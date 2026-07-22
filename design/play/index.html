@@ -94,17 +94,32 @@
   .lock { opacity: .45; }
   /* 纸偶怪兽 + 战场氛围(纯 CSS 布景,将来可整体换成 Akun 的背景图) */
   .stage { display: flex; justify-content: space-around; align-items: flex-end; padding: 10px 4px 20px; min-height: 168px; border-radius: 12px; position: relative; overflow: hidden;
+    /* 布景配色走变量,按关卡主题切换(data-theme) */
+    --sky1: #14112a; --sky2: #1a1533; --sky3: #241f38; --glow: rgba(124, 58, 237, .16);
+    --hillA: #1c1734; --hillB: #181330; --gnd1: #2a2346; --gnd2: #1f1a38; --gline: rgba(167, 139, 250, .22);
     background:
-      radial-gradient(ellipse at 50% 118%, rgba(124, 58, 237, .16) 0%, transparent 55%),
-      linear-gradient(180deg, #14112a 0%, #1a1533 55%, #241f38 100%); }
+      radial-gradient(ellipse at 50% 118%, var(--glow) 0%, transparent 55%),
+      linear-gradient(180deg, var(--sky1) 0%, var(--sky2) 55%, var(--sky3) 100%); }
+  .stage[data-theme=forest] { --sky1:#0d1b12; --sky2:#132718; --sky3:#1d3322; --glow:rgba(74,222,128,.15);
+    --hillA:#173420; --hillB:#122a19; --gnd1:#25422b; --gnd2:#1a3120; --gline:rgba(134,239,172,.28); }
+  .stage[data-theme=snow] { --sky1:#0f1a2e; --sky2:#17273f; --sky3:#223550; --glow:rgba(139,213,255,.18);
+    --hillA:#1f3552; --hillB:#192c46; --gnd1:#2e4868; --gnd2:#243c5a; --gline:rgba(186,230,255,.32); }
+  .stage[data-theme=dusk] { --sky1:#2a1218; --sky2:#38181a; --sky3:#42221a; --glow:rgba(251,146,60,.17);
+    --hillA:#341b16; --hillB:#2a1511; --gnd1:#3f2517; --gnd2:#301c12; --gline:rgba(251,191,36,.3); }
+  .stage[data-theme=swamp] { --sky1:#121a11; --sky2:#172115; --sky3:#20291a; --glow:rgba(163,230,53,.13);
+    --hillA:#1b2616; --hillB:#161e11; --gnd1:#27321e; --gnd2:#1d2716; --gline:rgba(163,230,53,.24); }
+  .stage[data-theme=rocky] { --sky1:#1a1512; --sky2:#211a15; --sky3:#2b221a; --glow:rgba(251,191,36,.11);
+    --hillA:#251d14; --hillB:#1f1810; --gnd1:#332718; --gnd2:#281f12; --gline:rgba(214,178,120,.26); }
+  .stage[data-theme=lair] { --sky1:#200f14; --sky2:#2a1218; --sky3:#341419; --glow:rgba(248,113,113,.19);
+    --hillA:#2c1216; --hillB:#230e12; --gnd1:#3c1a1e; --gnd2:#2d1316; --gline:rgba(248,113,113,.32); }
   .stage::before { /* 远山剪影 */ content: ""; position: absolute; left: 0; right: 0; bottom: 18px; height: 54px; z-index: 0; pointer-events: none; opacity: .85;
     background:
-      radial-gradient(100px 46px at 10% 100%, #1c1734 60%, transparent 61%),
-      radial-gradient(150px 62px at 36% 100%, #181330 60%, transparent 61%),
-      radial-gradient(120px 50px at 66% 100%, #1c1734 60%, transparent 61%),
-      radial-gradient(160px 66px at 94% 100%, #181330 60%, transparent 61%); }
+      radial-gradient(100px 46px at 10% 100%, var(--hillA) 60%, transparent 61%),
+      radial-gradient(150px 62px at 36% 100%, var(--hillB) 60%, transparent 61%),
+      radial-gradient(120px 50px at 66% 100%, var(--hillA) 60%, transparent 61%),
+      radial-gradient(160px 66px at 94% 100%, var(--hillB) 60%, transparent 61%); }
   .stage::after { /* 地面 */ content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 18px; z-index: 0; pointer-events: none;
-    background: linear-gradient(180deg, #2a2346, #1f1a38); border-top: 1px solid rgba(167, 139, 250, .22); }
+    background: linear-gradient(180deg, var(--gnd1), var(--gnd2)); border-top: 1px solid var(--gline); }
   .doll { display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; z-index: 1; }
   .doll::before { /* 脚下投影 */ content: ""; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); width: 78%; height: 10px; border-radius: 50%; pointer-events: none;
     background: radial-gradient(50% 50% at 50% 50%, rgba(0, 0, 0, .5), transparent 70%); }
@@ -133,18 +148,22 @@
   .dpart.art.torso{ width: 84px; height: 76px; }
   .dpart.art.tail { width: 36px; height: 24px; transform: none; }
   .dpart.art img.spore { filter: hue-rotate(115deg) saturate(.9); }   /* 芽孢长出来的手:复用本体图调绿 */
+  /* PVE 生物图标(整只动物当躯干,五官另挂):比零件纸偶大一号 */
+  .dpart.art.creature.torso { width: 104px; height: 92px; }
+  .dpart.art.creature.head  { width: 44px;  height: 44px; }
+  .dpart.art.creature.hand  { width: 38px;  height: 38px; }
   .doll.faceL .dpart.art img { transform: scaleX(-1); }               /* 图全部朝右画,右侧怪兽翻面对峙 */
   @keyframes hitflashArt { 0% { filter: brightness(2.4) contrast(1.3) saturate(.2) drop-shadow(0 0 4px rgba(255,255,255,.9)); } 100% {} }
   .dpart.art.hitfx { animation: hitflashArt .3s; }                    /* 透明 PNG 用发光代替方框描边 */
   /* —— 事件视觉语法(E=向右/我方出手,W=向左/敌方出手)—— */
-  @keyframes atkE { 0%{transform:none} 30%{transform:translateX(-7px)} 55%{transform:translateX(20px)} 72%{transform:translateX(20px)} 100%{transform:none} }
-  @keyframes atkW { 0%{transform:none} 30%{transform:translateX(7px)} 55%{transform:translateX(-20px)} 72%{transform:translateX(-20px)} 100%{transform:none} }
-  @keyframes bounceE { 0%{transform:none} 40%{transform:translateX(16px)} 65%{transform:translateX(-9px)} 100%{transform:none} }
-  @keyframes bounceW { 0%{transform:none} 40%{transform:translateX(-16px)} 65%{transform:translateX(9px)} 100%{transform:none} }
-  @keyframes joltE { 0%{transform:none} 30%{transform:translateX(7px) rotate(1.5deg)} 100%{transform:none} }
-  @keyframes joltW { 0%{transform:none} 30%{transform:translateX(-7px) rotate(-1.5deg)} 100%{transform:none} }
-  @keyframes slipE { 0%{transform:none} 35%{transform:translateX(14px) rotate(3deg)} 100%{transform:none} }
-  @keyframes slipW { 0%{transform:none} 35%{transform:translateX(-14px) rotate(-3deg)} 100%{transform:none} }
+  @keyframes atkE { 0%{transform:none} 28%{transform:translateX(-10px) scaleY(.96)} 55%{transform:translateX(30px) scaleY(1.03)} 72%{transform:translateX(30px)} 100%{transform:none} }
+  @keyframes atkW { 0%{transform:none} 28%{transform:translateX(10px) scaleY(.96)} 55%{transform:translateX(-30px) scaleY(1.03)} 72%{transform:translateX(-30px)} 100%{transform:none} }
+  @keyframes bounceE { 0%{transform:none} 40%{transform:translateX(20px)} 65%{transform:translateX(-11px)} 100%{transform:none} }
+  @keyframes bounceW { 0%{transform:none} 40%{transform:translateX(-20px)} 65%{transform:translateX(11px)} 100%{transform:none} }
+  @keyframes joltE { 0%{transform:none} 30%{transform:translateX(13px) rotate(2.5deg) scaleY(.95)} 100%{transform:none} }
+  @keyframes joltW { 0%{transform:none} 30%{transform:translateX(-13px) rotate(-2.5deg) scaleY(.95)} 100%{transform:none} }
+  @keyframes slipE { 0%{transform:none} 35%{transform:translateX(18px) rotate(4deg)} 100%{transform:none} }
+  @keyframes slipW { 0%{transform:none} 35%{transform:translateX(-18px) rotate(-4deg)} 100%{transform:none} }
   @keyframes squashK { 0%{transform:none} 40%{transform:scaleX(1.06) scaleY(.94)} 100%{transform:none} }
   @keyframes wobbleK { 0%{transform:none} 22%{transform:rotate(3deg)} 48%{transform:rotate(-3deg)} 72%{transform:rotate(1.6deg)} 100%{transform:none} }
   .doll.defeat { filter: grayscale(1) brightness(.7); opacity: .55; transform: translateY(9px) rotate(7deg); transition: transform .45s ease-in, filter .35s, opacity .45s; }
@@ -160,13 +179,18 @@
   @keyframes impactK { 0% { transform: translate(-50%,-50%) scale(.3); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1.4); opacity: 0; } }
   .impact { position: absolute; top: 50%; left: 50%; width: 26px; height: 26px; border: 2px solid #fff; border-radius: 50%; pointer-events: none; z-index: 7; animation: impactK .15s ease-out forwards; }
   .impact.big { width: 38px; height: 38px; border-color: #fbbf24; box-shadow: 0 0 0 5px rgba(251,191,36,.35); }
-  /* 分级伤害数字 */
-  @keyframes floatup { 0% { opacity: 0; transform: translate(-50%, 3px) scale(.8); } 15% { opacity: 1; transform: translate(-50%, -2px) scale(1); } 100% { opacity: 0; transform: translate(-50%, -24px) scale(1); } }
-  @keyframes popup  { 0% { opacity: 0; transform: translate(-50%, 2px) scale(.6); } 25% { opacity: 1; transform: translate(-50%, -6px) scale(1.22); } 45% { transform: translate(-50%, -8px) scale(1); } 100% { opacity: 0; transform: translate(-50%, -28px) scale(1); } }
+  /* 分级伤害数字:重击/暴击带弹跳(--fxdx/--fxrot 每次随机,同一部位连续挨打数字不重叠) */
+  @keyframes floatup { 0% { opacity: 0; transform: translate(calc(-50% + var(--fxdx, 0px)), 4px) scale(.7); } 18% { opacity: 1; transform: translate(calc(-50% + var(--fxdx, 0px)), -4px) scale(1.15); } 32% { transform: translate(calc(-50% + var(--fxdx, 0px)), -6px) scale(1); } 100% { opacity: 0; transform: translate(calc(-50% + var(--fxdx, 0px)), -28px) scale(1); } }
+  @keyframes popup { 0% { opacity: 0; transform: translate(calc(-50% + var(--fxdx, 0px)), 6px) scale(.4) rotate(var(--fxrot, 0deg)); }
+    22% { opacity: 1; transform: translate(calc(-50% + var(--fxdx, 0px)), -10px) scale(1.55) rotate(var(--fxrot, 0deg)); }
+    38% { transform: translate(calc(-50% + var(--fxdx, 0px)), -6px) scale(.92) rotate(var(--fxrot, 0deg)); }
+    54% { transform: translate(calc(-50% + var(--fxdx, 0px)), -16px) scale(1.12) rotate(var(--fxrot, 0deg)); }
+    68% { transform: translate(calc(-50% + var(--fxdx, 0px)), -14px) scale(1) rotate(var(--fxrot, 0deg)); }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--fxdx, 0px)), -36px) scale(1) rotate(var(--fxrot, 0deg)); } }
   .fxlabel { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 800; white-space: nowrap; pointer-events: none; animation: floatup .5s forwards; z-index: 8; text-shadow: 0 1px 3px #000; }
-  .fxlabel.d1 { font-size: 16px; animation: floatup .55s forwards; }
-  .fxlabel.d2 { font-size: 21px; animation: popup .6s forwards; }
-  .fxlabel.d3 { font-size: 26px; color: #fbbf24; -webkit-text-stroke: 1px #6b3f00; animation: popup .7s forwards; }
+  .fxlabel.d1 { font-size: 18px; animation: floatup .55s forwards; }
+  .fxlabel.d2 { font-size: 25px; animation: popup .65s forwards; }
+  .fxlabel.d3 { font-size: 31px; color: #fbbf24; -webkit-text-stroke: 1px #6b3f00; animation: popup .75s forwards; }
   .fxlabel.fastfx { animation-duration: .18s !important; }
   /* 击破残骸(克隆节点,不动真实 DOM) */
   .debris { position: absolute; pointer-events: none; z-index: 5; transition: transform .35s cubic-bezier(.2,.7,.4,1), opacity .4s; }
@@ -295,6 +319,9 @@
 <!-- 选件底部弹层 -->
 <div class="sheet" id="sheet"><div class="inner"><h3 id="sheetTitle"></h3><div id="sheetOpts"></div></div></div>
 <div class="toast" id="toastBox"></div>
+<div style="text-align:center;font-size:11px;color:var(--dim);padding:6px 0 10px">
+  野兽图标来自 <a href="https://game-icons.net" style="color:var(--dim)">game-icons.net</a>(Caro Asercion / Delapouite / sbed,CC BY 3.0)
+</div>
 
 <script src="engine.js"></script>
 <script>
@@ -426,6 +453,11 @@ const PART_ART = {
   新手腿: "leg/leg_01.png", 灵活的腿: "leg/leg_02.png", 踢腿: "leg/leg_03.png",
   鞭腿: "leg/leg_04.png", 猛腿: "leg/leg_05.png",
   新手尾巴: "tail/tail_01.png", 猛尾: "tail/tail_02.png",
+  // PVE 生物(占位:game-icons.net CC BY 3.0,见 assets/creatures/README;Akun 出正式画稿后替换同名文件)
+  鹿躯干: "../assets/creatures/deer.svg",
+  猛犸象躯干: "../assets/creatures/mammoth.svg", 猛犸象头: "../assets/creatures/mammoth-head.svg",
+  剑齿虎躯干: "../assets/creatures/tiger.svg", 剑齿虎头: "../assets/creatures/sabertooth-head.svg",
+  剑齿虎爪: "../assets/creatures/claw.svg",
 };
 function partHue(name) {
   let h = 0;
@@ -442,7 +474,9 @@ function dollPartHTML(p, sideKey) {
   const art = PART_ART[p.name];
   if (art) {
     const spore = p.name === "芽孢长出来的手" ? ' class="spore"' : "";
-    return `<div class="dpart art ${p.kind}${deco}" data-dk="${sideKey}|${key}" title="${key}"><img src="${ART_BASE}${art}" alt="${key}" draggable="false"${spore}></div>`;
+    const src = art.startsWith("../") ? art : ART_BASE + art;   // 生物图标存 creatures/,零件图存 parts-side-v1/
+    const creature = p.pve ? " creature" : "";
+    return `<div class="dpart art ${p.kind}${deco}${creature}" data-dk="${sideKey}|${key}" title="${key}"><img src="${src}" alt="${key}" draggable="false"${spore}></div>`;
   }
   const eye = p.kind === "head" ? '<i class="eye"></i>' : "";
   return `<div class="dpart ${p.kind}${deco}" data-dk="${sideKey}|${key}" title="${key}" style="background:${partColor(p)}">${eye}</div>`;
@@ -493,6 +527,8 @@ function dollFx(sideKey, key, label, color, sizeCls, flash = true) {
     s.className = "fxlabel" + (sizeCls ? " " + sizeCls : "") + (isFast() ? " fastfx" : "");
     s.textContent = label;
     if (color) s.style.color = color;
+    s.style.setProperty("--fxdx", (Math.random() * 22 - 11).toFixed(0) + "px");   // 数字随机漂移+歪斜:连击不重叠、更有"跳"感
+    if (sizeCls === "d2" || sizeCls === "d3") s.style.setProperty("--fxrot", (Math.random() * 12 - 6).toFixed(1) + "deg");
     el.appendChild(s);
     later(() => s.remove(), 800);
   }
@@ -694,15 +730,24 @@ function renderBuild() {
 
 function saveBuild() { save.build = build; persist(); }
 window.removePart = (key, i) => { build[key].splice(i, 1); saveBuild(); renderBuild(); };
+// 未解锁零件默认收进"图鉴"折叠区:选装列表只摆现在能用的(2026-07-22 Yuda 实玩反馈)
+function lockedFoldHTML(items) {
+  if (!items.length) return "";
+  return `<div class="opt" style="opacity:.7" onclick="const el=$('lockFold');el.style.display=el.style.display==='none'?'':'none'">
+      <span class="nm">🔒 未解锁 ${items.length} 件</span><span class="st">打赢战役关卡解锁 · 点击翻图鉴</span></div>
+    <div id="lockFold" style="display:none">${items.join("")}</div>`;
+}
 window.openSheet = (kind) => {
   const names = CAT_BY_KIND[kind];
   const u = unlockedSet();
   $("sheetTitle").textContent = kind === "torso" ? "更换躯干" : "添加部件(点击装上)";
-  $("sheetOpts").innerHTML = names.map((n) => {
+  const avail = [], lock = [];
+  for (const n of names) {
     const locked = !u.has(n);
-    return `<div class="opt ${locked ? "lock" : ""}" onclick="pick('${kind}','${n}',${locked})">
-      <span class="nm">${locked ? "🔒 " : ""}${n}</span><span class="st">${statStr(n)}${locked ? " · 战役解锁" : ""}</span></div>`;
-  }).join("");
+    (locked ? lock : avail).push(`<div class="opt ${locked ? "lock" : ""}" onclick="pick('${kind}','${n}',${locked})">
+      <span class="nm">${locked ? "🔒 " : ""}${n}</span><span class="st">${statStr(n)}${locked ? " · 战役解锁" : ""}</span></div>`);
+  }
+  $("sheetOpts").innerHTML = avail.join("") + lockedFoldHTML(lock);
   $("sheet").classList.add("on");
 };
 window.pick = (kind, n, locked) => {
@@ -722,14 +767,16 @@ window.openPlugSheet = (key, i) => {
   const u = unlockedSet();
   const opts = Object.entries(E.PLUGINS).filter(([, s]) => s.pos.includes(kind));
   $("sheetTitle").textContent = `「${host}」的插件(限 1 个,点击挂载)`;
+  const avail = [], lock = [];
+  for (const [n, s] of opts) {
+    const locked = !u.has(n);
+    (locked ? lock : avail).push(`<div class="opt ${locked ? "lock" : ""}" onclick="pickPlug('${key}',${i},'${n}',${locked})">
+        <span class="nm">${locked ? "🔒 " : ""}${cur === n ? "✅ " : ""}${n}</span>
+        <span class="st">${PLUG_DESC[n]} · 💰${s.price}${locked ? " · 战役解锁" : ""}</span></div>`);
+  }
   $("sheetOpts").innerHTML =
     `<div class="opt" onclick="pickPlug('${key}',${i},'',false)"><span class="nm">🚫 不装插件</span><span class="st">${cur ? "点击卸下当前插件" : "当前"}</span></div>` +
-    opts.map(([n, s]) => {
-      const locked = !u.has(n);
-      return `<div class="opt ${locked ? "lock" : ""}" onclick="pickPlug('${key}',${i},'${n}',${locked})">
-        <span class="nm">${locked ? "🔒 " : ""}${cur === n ? "✅ " : ""}${n}</span>
-        <span class="st">${PLUG_DESC[n]} · 💰${s.price}${locked ? " · 战役解锁" : ""}</span></div>`;
-    }).join("");
+    avail.join("") + lockedFoldHTML(lock);
   $("sheet").classList.add("on");
 };
 window.pickPlug = (key, i, plug, locked) => {
@@ -933,7 +980,7 @@ window.wildFight = () => {
   const w = save.wild;
   const st = WILD_STAGES[w.stage], e = wildEnemy(w);
   showTab("fight");
-  startBattle(null, { wild: true, name: `${st.name}·${e.n}`, enemy: e.s, reward: st.reward });
+  startBattle(null, { wild: true, boss: !!st.boss, name: `${st.name}·${e.n}`, enemy: e.s, reward: st.reward });
 };
 $("resetCamp").onclick = () => {
   if (!confirm("重置战役进度和配装?")) return;
@@ -1293,6 +1340,14 @@ function startBattle(seed, campLevel) {
     ? Object.assign({ name: `第${campLevel.lv}关·${campLevel.name}` }, campLevel.enemy)
     : Object.assign({ name: enemySel.value }, E.ARCHETYPES[enemySel.value]);
   const a = E.makeMonster(specA.name, specA), b = E.makeMonster(specB.name, specB);
+  // 关卡主题布景:战役按关卡定,荒野=戈壁/Boss=巢穴,自由对战用默认夜色
+  const THEME_BY_LV = { 1: "forest", 2: "snow", 3: "dusk", 4: "swamp" };
+  const stEl = document.querySelector("#pgFight .stage");
+  if (stEl) {
+    const theme = !campLevel ? "" :
+      campLevel.wild ? (campLevel.boss ? "lair" : "rocky") : (THEME_BY_LV[campLevel.lv] || "");
+    if (theme) stEl.dataset.theme = theme; else delete stEl.dataset.theme;
+  }
   renderArena(a, b);
   $("logbox").innerHTML = "";
   $("banner").className = "banner";
