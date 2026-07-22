@@ -192,6 +192,28 @@ def comp_stats(specs):
             f"/插件{sum(n_plugged(s) for s in specs)/n:.1f}")
 
 
+def diversity_stats(specs):
+    """多样性 KPI(2026-07-22 起进报告):衡量顶层是否被单一形态/单一零件统治。
+    - 形态数:不同 (头,手,腿,尾) 数目组合的种数——越多说明可行流派越多
+    - 零件种数 / 依赖度:去插件后用到的不同零件名数,以及最高频零件的出现率(接近 100% = 全场都靠它)"""
+    n = len(specs)
+    shapes = {(len(s["heads"]), len(s["hands"]), len(s["legs"]), len(s["tails"]))
+              for s in specs}
+    def names(s):
+        out = [s["torso"]]
+        for key in ("heads", "hands", "legs", "tails"):
+            for e in s[key]:
+                out.append(e[0] if isinstance(e, (tuple, list)) else e)
+        return out
+    cnt = Counter()
+    for s in specs:
+        for name in set(names(s)):   # 每配装计一次,量的是"多少配装依赖它"
+            cnt[name] += 1
+    top_part, top_n = cnt.most_common(1)[0] if cnt else ("-", 0)
+    return (f"形态 {len(shapes)} 种,零件 {len(cnt)} 种,"
+            f"最依赖件 {top_part}({top_n}/{n} 配装)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="baseline",
@@ -248,6 +270,8 @@ def main():
               f"| {len(s['heads'])}/{len(s['hands'])}/{len(s['legs'])} |")
     print(f"\n决赛圈 40 强构成:{comp_stats([specs[i] for i in top])}")
     print(f"决赛圈前 10 构成:{comp_stats([specs[i] for i in final[:10]])}")
+    print(f"决赛圈 40 强多样性:{diversity_stats([specs[i] for i in top])}")
+    print(f"决赛圈前 10 多样性:{diversity_stats([specs[i] for i in final[:10]])}")
 
 
 if __name__ == "__main__":
