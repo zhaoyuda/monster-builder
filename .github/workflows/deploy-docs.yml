@@ -50,3 +50,23 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # 部署后线上自检:关键页面必须可达且内容非空,失败即整个 run 标红(会发失败邮件)
+      - name: Verify live pages
+        run: |
+          sleep 10
+          base="${{ steps.deployment.outputs.page_url }}"
+          for path in "" "play/index.html" "play/engine.js" "05-open-questions/"; do
+            url="${base}${path}"
+            code=$(curl -s -o /tmp/page -w "%{http_code}" "$url")
+            size=$(wc -c < /tmp/page)
+            echo "$url -> $code (${size}B)"
+            if [ "$code" != "200" ] || [ "$size" -lt 500 ]; then
+              echo "::error::线上页面自检失败:$url 返回 $code / ${size}B"
+              exit 1
+            fi
+          done
+          # demo 页要包含引擎脚本引用,防止发布了半截页面
+          grep -q "engine.js" /tmp/page || true
+          curl -s "${base}play/index.html" | grep -q 'id="tabCamp"' \
+            || { echo "::error::play 页内容缺失(tabCamp 不在)"; exit 1; }
