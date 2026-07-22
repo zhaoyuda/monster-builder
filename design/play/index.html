@@ -228,6 +228,9 @@
 
   <!-- 装配页 -->
   <div id="pgBuild" style="display:none">
+    <div class="card" id="buildTut" style="display:none;border-color:var(--acc2)">
+      <div class="hint" style="color:var(--text)">📖 你可以通过安装额外的<b>插槽</b>,增加你的头和四肢数量。<b>注意:四肢需要有头的指挥,如果指挥点不足,新增的四肢可能无法攻击!!</b></div>
+    </div>
     <div class="card">
       <h2>快速开始</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -640,6 +643,10 @@ const AudioFX = (() => {
 function renderBuild() {
   const m = monster();
   const errs = E.validate(m);
+  // L4 装配教学(Akun 2026-07-22:多头多手+指挥点提示,显示到通关 L4 为止)
+  const tut = $("buildTut");
+  if (tut) tut.style.display =
+    clearedSet().has(3) && !clearedSet().has(4) ? "" : "none";
   const cmd = E.commandSupply(m), limbs = m.hands.length + m.legs.length;
   const headSlots = 1 + build.slots.filter((s) => entryName(s) === "头部插槽").length;
   const limbSlots = 4 + build.slots.filter((s) => entryName(s) === "四肢插槽").length;
@@ -860,7 +867,7 @@ const WILD_STAGES = [
         hands: ["强力爪", "强力爪", { name: "抓握手", plugin: "骨盾" }] } },
   ] },
 ];
-const wildUnlocked = () => clearedSet().has(3);
+const wildUnlocked = () => clearedSet().has(4);   // "新手教学关结束"=L4(Akun 2026-07-22)
 function newWildRun() {
   return { stage: 0, bio: WILD_START_BIO, over: false,
            picks: WILD_STAGES.map((st) => Math.floor(Math.random() * st.pool.length)) };
@@ -877,7 +884,7 @@ function renderWild() {
   const box = $("wildCard");
   if (!box) return;
   if (!wildUnlocked()) {
-    box.innerHTML = `<h2>🏔 称霸荒野</h2><div class="hint">🔒 通关第 3 关解锁——出了教学关,对手就都是大小怪兽了。</div>`;
+    box.innerHTML = `<h2>🏔 称霸荒野</h2><div class="hint">🔒 通关第 4 关解锁——出了教学关,对手就都是大小怪兽了。</div>`;
     return;
   }
   const w = save.wild;
@@ -1349,8 +1356,10 @@ function finish(rep) {
       save.cleared.push(curCamp.lv);
       persist();
       toast(`🎁 首次通关!+${curCamp.reward} 生物质,解锁:${curCamp.unlocks.join("、")}`);
+      if (curCamp.winStory) curCamp.winStory.split("\n").forEach((s) => logLine("📜 " + s, "win"));
       logLine(`🎁 获得 ${curCamp.reward} 生物质;解锁零件:${curCamp.unlocks.join("、")}——去「装配」页升级!`, "win");
       if (curCamp.lv === 3) logLine("💡 新解锁的「头顶尖刺」「胶质瘤」是插件——在「装配」页点部件上的 🔌 挂载。", "");
+      if (curCamp.lv === 4) logLine("🏔 新手教学结束!「战役」页解锁了称霸荒野——去征服无尽的旷野。", "");
     } else {
       logLine("(已通关过,本次无奖励)", "");
     }
