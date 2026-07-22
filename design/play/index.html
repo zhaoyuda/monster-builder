@@ -44,9 +44,24 @@
   .sheet.on { display: flex; }
   .sheet .inner { background: var(--panel); border-radius: 18px 18px 0 0; width: 100%; max-width: 720px; margin: 0 auto; max-height: 70vh; overflow-y: auto; padding: 16px; }
   .sheet h3 { font-size: 15px; margin-bottom: 10px; color: var(--acc); }
-  .opt { display: flex; justify-content: space-between; gap: 8px; padding: 11px 8px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .opt { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--line); cursor: pointer; }
   .opt:active { background: var(--panel2); }
+  .opt .l { display: flex; align-items: center; gap: 9px; min-width: 0; }
   .opt .nm { font-weight: 600; }
+  /* 零件缩略图:有图用图(素材同一张,object-fit 缩),没图沿用色块 */
+  .thumb { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; flex: none; overflow: hidden; font-size: 15px; }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .thumb.unknown { background: #221d3a; border: 1px dashed var(--line); position: relative; }
+  .thumb.unknown img { filter: brightness(0); opacity: .45; }   /* 见过轮廓才有,没见过全黑剪影 */
+  .thumb.unknown i { position: absolute; font-style: normal; font-size: 16px; }
+  /* 图鉴 */
+  .dexgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 8px 0 4px; }
+  .dexit { display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--panel2); min-width: 0; }
+  .dexit .thumb { width: 42px; height: 42px; }
+  .dexit .m { min-width: 0; }
+  .dexit .nm { font-weight: 700; font-size: 13px; }
+  .dexit .st { font-size: 11px; color: var(--dim); line-height: 1.4; }
+  .dexit.unk { opacity: .75; }
   .opt .st { color: var(--dim); font-size: 13px; text-align: right; }
   /* 战斗 */
   .arena { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -195,7 +210,20 @@
   /* 击破残骸(克隆节点,不动真实 DOM) */
   .debris { position: absolute; pointer-events: none; z-index: 5; transition: transform .35s cubic-bezier(.2,.7,.4,1), opacity .4s; }
   .debris.rest { filter: grayscale(1); opacity: .45; }
-  .buildStage { display: flex; justify-content: center; padding: 8px 0 4px; }
+  .buildStage { display: flex; justify-content: center; padding: 10px 0 6px; }
+  /* 装配台:大模型 + 部位就地编辑(zoom 走真实布局,不会和下方内容重叠) */
+  .buildStage .doll { zoom: 1.6; animation: none; }
+  @media (max-width: 480px) { .buildStage .doll { zoom: 1.15; } }
+  .buildStage .dpart { cursor: pointer; }
+  .buildStage .dpart:hover { filter: brightness(1.18) drop-shadow(0 0 5px rgba(167, 139, 250, .8)); }
+  .dpart.ghost { background: none; border: 2px dashed rgba(167, 139, 250, .5); box-shadow: none; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; color: var(--acc); font-weight: 700; font-size: 10px; opacity: .75; white-space: nowrap; }
+  .dpart.ghost:hover { opacity: 1; background: rgba(124, 92, 255, .12); }
+  .dpart.ghost.head { width: 36px; height: 36px; border-radius: 50%; }
+  .dpart.ghost.hand { width: 32px; height: 32px; }
+  .dpart.ghost.leg  { width: 24px; height: 38px; }
+  .dpart.ghost.tail { width: 36px; height: 24px; transform: none; }
+  .buildHint { text-align: center; font-size: 12px; color: var(--dim); margin-bottom: 8px; }
   /* 开场 VS 报幕(瞬间挡不放) */
   .vswrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; z-index: 9; pointer-events: none; background: rgba(10, 8, 20, .38); }
   .vswrap.out { animation: vsOutK .22s forwards; }
@@ -237,13 +265,14 @@
     <button id="tabCamp" class="on">🗺️ 战役</button>
     <button id="tabBuild">🔧 装配</button>
     <button id="tabFight">⚔️ 对战</button>
+    <button id="tabDex">📖 图鉴</button>
   </div>
 
   <!-- 战役页(PVE) -->
   <div id="pgCamp">
     <div class="card">
       <h2>🧬 生物质:<span id="bioLbl"></span>(配装预算)</h2>
-      <div class="hint">打赢关卡获得生物质、解锁新零件;去「装配」页升级你的怪兽再挑战下一关。</div>
+      <div class="hint">打赢关卡获得生物质、解锁新零件;去「装配」页升级你的怪兽再挑战下一关。进度自动保存在本机浏览器,下次打开接着玩。</div>
       <div id="lvCards"></div>
       <div style="margin-top:10px"><button class="btn ghost" id="resetCamp" style="font-size:12px">🗑 重置战役进度</button></div>
     </div>
@@ -265,8 +294,14 @@
     </div>
 
     <div class="card">
-      <h2>我的怪兽</h2>
+      <h2>😤 <span id="buildName">我的怪兽</span></h2>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="mname" maxlength="12" placeholder="给怪兽起个名字…"
+          style="flex:1;min-width:0;font-size:14px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text)">
+        <button class="btn ghost" id="randName">🎲 随机名</button>
+      </div>
       <div class="buildStage"><div id="buildDoll"></div></div>
+      <div class="buildHint">🖐 直接点怪兽:部件=换插件/拆下,虚线 <b>+</b>=就地添加,躯干=更换</div>
       <div class="statbar" id="stats"></div>
       <div class="errbox" id="errs"></div>
       <div class="warnbox" id="warns"></div>
@@ -312,6 +347,15 @@
         <button class="btn ghost" id="muteBtn" title="音效开关"></button>
         <span class="seed" id="seedLbl"></span>
       </div>
+    </div>
+  </div>
+
+  <!-- 图鉴页:没见过的零件放 ❓,打过照面(自己装过/对手用过)才揭晓 -->
+  <div id="pgDex" style="display:none">
+    <div class="card">
+      <h2>📖 零件图鉴 <span id="dexCount" style="color:var(--dim);font-weight:400"></span></h2>
+      <div class="hint">见过的零件会记录在这里——对手用过的也算。❓ 是你还没遇到的,慢慢探索。</div>
+      <div id="dexBody"></div>
     </div>
   </div>
 </div>
@@ -361,11 +405,12 @@ function sanitizeBuild(b) {
 }
 function loadSave() {
   try {
-    const s = Object.assign({ cleared: [], build: null }, JSON.parse(localStorage.getItem(SAVE_KEY) || "{}"));
+    const s = Object.assign({ cleared: [], build: null, name: "", seen: [] }, JSON.parse(localStorage.getItem(SAVE_KEY) || "{}"));
     s.build = sanitizeBuild(s.build);
+    if (!Array.isArray(s.seen)) s.seen = [];
     return s;
   }
-  catch (e) { return { cleared: [], build: null }; }
+  catch (e) { return { cleared: [], build: null, name: "", seen: [] }; }
 }
 let save = loadSave();
 function persist() { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
@@ -379,6 +424,33 @@ function unlockedSet() {
   const u = new Set(E.STARTER_UNLOCKED);
   for (const l of E.CAMPAIGN) if (clearedSet().has(l.lv)) l.unlocks.forEach((n) => u.add(n));
   return u;
+}
+
+// ===== 怪兽名字(手填或随机;存档随进度保留)=====
+const monName = () => (save.name || "").trim() || "我的怪兽";
+const NAME_PRE = ["暴走", "碎骨", "无头", "三头", "肿脑", "毒牙", "咆哮", "黏糊", "蛮荒", "雪原",
+                  "闪电", "铁憨", "喷火", "嗜睡", "傲娇", "旋风", "淤泥", "狂霸", "夜行", "臭臭"];
+const NAME_CORE = ["格罗姆", "布鲁托", "轰隆", "咕噜", "嘎嘣", "扎克顿", "皮皮", "嗷呜", "咔嚓",
+                   "波比", "戈尔", "唔噜噜", "蹦蹦", "大壮", "二蛋", "嘟嘟", "史莱姆姆", "盖亚"];
+function randMonsterName() {
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  return pick(NAME_PRE) + pick(NAME_CORE);
+}
+
+// ===== 图鉴"见过"记录:自己装过/对手用过都算 =====
+function markSeen(names) {
+  const s = new Set(save.seen);
+  let changed = false;
+  for (const n of names) if (n && !s.has(n)) { s.add(n); changed = true; }
+  if (changed) { save.seen = [...s]; persist(); }
+}
+function monsterSeenNames(m) {   // 一只怪兽身上所有玩家可用的零件+插件名
+  const out = [];
+  for (const p of [...E.allParts(m), ...m.tails]) {
+    if (!p.pve && E.CATALOG[p.name] && !E.CATALOG[p.name].derived) out.push(p.name);
+    if (p.plugin) out.push(p.plugin);
+  }
+  return out;
 }
 
 // ===== 玩家配装状态(默认 = PVE 起始装)=====
@@ -399,13 +471,22 @@ const PLUG_DESC = {
   "胶质瘤": "这只手被破后,全队每回合回 2 血,持续 5 回合",
   "肾上腺素": "这条腿被破后,全队立即回 5 血",
   "爆裂腺体": "这个部件被破后,对破坏者造成 40 伤害",
-  "耐火皮肤": "躯干受到的火焰伤害 -50%,免疫灼烧",
+  "耐火皮肤": "全身受到的火焰伤害 -50%,免疫灼烧",
   "撕裂爪": "这只手 -2 攻,命中后目标每回合掉 2 血 ×5 回合",
   "碎骨锥": "这条腿命中后,50% 使目标下回合不能行动",
   "尖刺皮肤": "躯干受伤时,反挂撕裂:攻击者每回合掉 2 血 ×2 回合",
   "普通能量核心": "供能 +20",
+  // 第二批(Akun 2026-07-22)
+  "耐毒皮肤": "全身受到的毒素伤害 -50%,免疫中毒",
+  "耐冰皮肤": "全身受到的冰冻伤害 -50%,免疫冻结",
+  "火蜥蜴尾巴": "我方灼烧每回合多掉 2 血;全队火焰伤害 -20%",
+  "毒蛇尾巴": "我方中毒每回合多掉 1 血;全队毒素伤害 -20%",
+  "冰虫尾巴": "我方冻结概率 +15%,先攻 +1;全队冰冻伤害 -20%",
+  "先守后攻": "这条腿闪避成功后,立即反击一次",
+  "头槌": "这只头攻击 +4",
+  "认真一拳": "这只手暴击倍率 2.0 → 2.5",
 };
-const PLUG_KIND_OF = { torso: "torso", heads: "head", hands: "hand", legs: "leg" };
+const PLUG_KIND_OF = { torso: "torso", heads: "head", hands: "hand", legs: "leg", tails: "tail" };
 
 function toast(msg) {
   const t = $("toastBox");
@@ -468,29 +549,53 @@ function partColor(p) {
   const sat = p.name.startsWith("装饰") ? 18 : 55;
   return `hsl(${partHue(p.name)} ${sat}% ${p.kind === "torso" ? 42 : 55}%)`;
 }
-function dollPartHTML(p, sideKey) {
+// 选件/图鉴用缩略图:与纸偶同一套素材,没图的零件用同色色块,插件用 🔌 色块
+function thumbHTML(name, revealed = true) {
+  const art = PART_ART[name];
+  const src = art ? (art.startsWith("../") ? art : ART_BASE + art) : "";
+  if (!revealed) return `<span class="thumb unknown">${src ? `<img src="${src}" alt="">` : ""}<i>❓</i></span>`;
+  if (src) return `<span class="thumb"><img src="${src}" alt=""></span>`;
+  const cat = E.CATALOG[name];
+  if (cat) return `<span class="thumb" style="background:${partColor({ name, kind: cat.kind })}"></span>`;
+  return `<span class="thumb" style="background:#3a3355">🔌</span>`;   // 插件无图
+}
+function dollPartHTML(p, sideKey, oc = "") {
   const deco = p.name.startsWith("装饰") ? " deco" : "";
   const key = p.kind === "torso" ? p.name : E.label(p);
   const art = PART_ART[p.name];
+  const click = oc ? ` onclick="${oc}"` : "";
   if (art) {
     const spore = p.name === "芽孢长出来的手" ? ' class="spore"' : "";
     const src = art.startsWith("../") ? art : ART_BASE + art;   // 生物图标存 creatures/,零件图存 parts-side-v1/
     const creature = p.pve ? " creature" : "";
-    return `<div class="dpart art ${p.kind}${deco}${creature}" data-dk="${sideKey}|${key}" title="${key}"><img src="${src}" alt="${key}" draggable="false"${spore}></div>`;
+    return `<div class="dpart art ${p.kind}${deco}${creature}" data-dk="${sideKey}|${key}" title="${key}"${click}><img src="${src}" alt="${key}" draggable="false"${spore}></div>`;
   }
   const eye = p.kind === "head" ? '<i class="eye"></i>' : "";
-  return `<div class="dpart ${p.kind}${deco}" data-dk="${sideKey}|${key}" title="${key}" style="background:${partColor(p)}">${eye}</div>`;
+  return `<div class="dpart ${p.kind}${deco}" data-dk="${sideKey}|${key}" title="${key}"${click} style="background:${partColor(p)}">${eye}</div>`;
 }
-function dollHTML(m, sideKey) {
-  const heads = m.heads.map((p) => dollPartHTML(p, sideKey)).join("");
-  const hands = m.hands.map((p) => dollPartHTML(p, sideKey));
+function dollHTML(m, sideKey, edit = false) {
+  // edit=装配台模式:部件可点(换插件/拆下),空位画虚线 + 号就地添加
+  const oc = (key, i) => (edit ? `buildPartClick('${key}',${i})` : "");
+  const ghost = (kind, label) => `<div class="dpart ghost ${kind}" onclick="openSheet('${kind}')" title="添加${label}">+${label[0]}</div>`;
+  let gHead = "", gHand = "", gLeg = "", gTail = "";
+  if (edit) {   // 剩余容量才亮加号(与 renderBuild 的槽位口径一致)
+    const headSlots = 1 + build.slots.filter((s) => entryName(s) === "头部插槽").length;
+    const limbSlots = 4 + build.slots.filter((s) => entryName(s) === "四肢插槽").length;
+    const limbUsed = build.hands.length + build.legs.length;
+    if (build.heads.length < headSlots) gHead = ghost("head", "头");
+    if (limbUsed < limbSlots) { gHand = ghost("hand", "手"); gLeg = ghost("leg", "腿"); }
+    if (build.tails.length < 1) gTail = ghost("tail", "尾巴");
+  }
+  const heads = m.heads.map((p, i) => dollPartHTML(p, sideKey, oc("heads", i))).join("");
+  const hands = m.hands.map((p, i) => dollPartHTML(p, sideKey, oc("hands", i)));
   const half = Math.ceil(hands.length / 2);
-  const tails = m.tails.map((p) => dollPartHTML(p, sideKey)).join("");
-  const legs = m.legs.map((p) => dollPartHTML(p, sideKey)).join("");
+  const tails = m.tails.map((p, i) => dollPartHTML(p, sideKey, oc("tails", i))).join("");
+  const legs = m.legs.map((p, i) => dollPartHTML(p, sideKey, oc("legs", i))).join("");
+  const torso = dollPartHTML(m.torso, sideKey, edit ? "openSheet('torso')" : "");
   return `<div class="doll${sideKey === "B" ? " faceL" : ""}" id="doll${sideKey}In">
-    <div class="drow">${heads || ""}</div>
-    <div class="drow dmid">${hands.slice(0, half).join("")}${dollPartHTML(m.torso, sideKey)}${hands.slice(half).join("")}${tails}</div>
-    <div class="drow">${legs}</div>
+    <div class="drow">${heads}${gHead}</div>
+    <div class="drow dmid">${hands.slice(0, half).join("")}${torso}${hands.slice(half).join("")}${gHand}${tails}${gTail}</div>
+    <div class="drow">${legs}${gLeg}</div>
   </div>`;
 }
 function dollEl(sideKey, key) {
@@ -689,7 +794,8 @@ function renderBuild() {
   const nLimbSlotUsed = build.hands.length + build.legs.length;   // 尾巴独立位
   const eu = E.energyUsed(m), sup = E.supplyTotal(m);
 
-  $("buildDoll").innerHTML = dollHTML(m, "P");
+  $("buildName").textContent = monName();
+  $("buildDoll").innerHTML = dollHTML(m, "P", true);
   const price = E.priceTotal(m), bud = budget();
   $("stats").innerHTML = [
     `<span class="${price > bud ? "warn" : ""}">🧬 生物质 <b>${price}/${bud}</b></span>`,
@@ -745,7 +851,7 @@ window.openSheet = (kind) => {
   for (const n of names) {
     const locked = !u.has(n);
     (locked ? lock : avail).push(`<div class="opt ${locked ? "lock" : ""}" onclick="pick('${kind}','${n}',${locked})">
-      <span class="nm">${locked ? "🔒 " : ""}${n}</span><span class="st">${statStr(n)}${locked ? " · 战役解锁" : ""}</span></div>`);
+      <span class="l">${thumbHTML(n)}<span class="nm">${locked ? "🔒 " : ""}${n}</span></span><span class="st">${statStr(n)}${locked ? " · 战役解锁" : ""}</span></div>`);
   }
   $("sheetOpts").innerHTML = avail.join("") + lockedFoldHTML(lock);
   $("sheet").classList.add("on");
@@ -760,21 +866,26 @@ window.pick = (kind, n, locked) => {
 };
 
 // ===== 插件挂载(Q17e:每部件限 1,装配期自由拆装)=====
-window.openPlugSheet = (key, i) => {
+window.buildPartClick = (key, i) => openPlugSheet(key, i, true);   // 装配台:点部件 → 插件/拆下一张弹层
+window.openPlugSheet = (key, i, withRm) => {
   const kind = PLUG_KIND_OF[key];
   const cur = key === "torso" ? build.torsoPlugin : entryPlugin(build[key][i]);
   const host = key === "torso" ? build.torso : entryName(build[key][i]);
   const u = unlockedSet();
   const opts = Object.entries(E.PLUGINS).filter(([, s]) => s.pos.includes(kind));
-  $("sheetTitle").textContent = `「${host}」的插件(限 1 个,点击挂载)`;
+  $("sheetTitle").textContent = withRm ? `「${host}」` : `「${host}」的插件(限 1 个,点击挂载)`;
   const avail = [], lock = [];
   for (const [n, s] of opts) {
     const locked = !u.has(n);
     (locked ? lock : avail).push(`<div class="opt ${locked ? "lock" : ""}" onclick="pickPlug('${key}',${i},'${n}',${locked})">
-        <span class="nm">${locked ? "🔒 " : ""}${cur === n ? "✅ " : ""}${n}</span>
+        <span class="l">${thumbHTML(n)}<span class="nm">${locked ? "🔒 " : ""}${cur === n ? "✅ " : ""}${n}</span></span>
         <span class="st">${PLUG_DESC[n]} · 💰${s.price}${locked ? " · 战役解锁" : ""}</span></div>`);
   }
-  $("sheetOpts").innerHTML =
+  const rmRow = withRm
+    ? `<div class="opt" onclick="$('sheet').classList.remove('on');removePart('${key}',${i})">
+        <span class="nm" style="color:var(--bad)">🗑 拆下「${host}」</span><span class="st">从怪兽身上移除</span></div>`
+    : "";
+  $("sheetOpts").innerHTML = rmRow +
     `<div class="opt" onclick="pickPlug('${key}',${i},'',false)"><span class="nm">🚫 不装插件</span><span class="st">${cur ? "点击卸下当前插件" : "当前"}</span></div>` +
     avail.join("") + lockedFoldHTML(lock);
   $("sheet").classList.add("on");
@@ -789,6 +900,21 @@ window.pickPlug = (key, i, plug, locked) => {
 };
 $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").classList.remove("on"); });
 
+// 起名:手填或随机,存档随进度保留
+$("mname").value = save.name || "";
+$("mname").addEventListener("input", () => {
+  save.name = $("mname").value.trim().slice(0, 12);
+  persist();
+  $("buildName").textContent = monName();
+});
+$("randName").onclick = () => {
+  const n = randMonsterName();
+  $("mname").value = n;
+  save.name = n;
+  persist();
+  $("buildName").textContent = monName();
+};
+
 // 预设
 const presetSel = $("preset");
 for (const n of Object.keys(E.ARCHETYPES)) presetSel.add(new Option(n, n));
@@ -802,8 +928,8 @@ $("loadPreset").onclick = () => {
 };
 
 // ===== 页签 =====
-function showTab(which) {   // "camp" | "build" | "fight"
-  for (const [tab, pg] of [["tabCamp", "pgCamp"], ["tabBuild", "pgBuild"], ["tabFight", "pgFight"]]) {
+function showTab(which) {   // "camp" | "build" | "fight" | "dex"
+  for (const [tab, pg] of [["tabCamp", "pgCamp"], ["tabBuild", "pgBuild"], ["tabFight", "pgFight"], ["tabDex", "pgDex"]]) {
     const on = tab === "tab" + which[0].toUpperCase() + which.slice(1);
     $(pg).style.display = on ? "" : "none";
     $(tab).classList.toggle("on", on);
@@ -812,7 +938,46 @@ function showTab(which) {   // "camp" | "build" | "fight"
 $("tabCamp").onclick = () => showTab("camp");
 $("tabBuild").onclick = () => showTab("build");
 $("tabFight").onclick = () => showTab("fight");
+$("tabDex").onclick = () => { renderDex(); showTab("dex"); };
 $("goFight").onclick = () => showTab("fight");
+
+// ===== 图鉴:已解锁/见过 → 亮牌;没见过 → ❓(有图的给全黑剪影吊胃口)=====
+function renderDex() {
+  const u = unlockedSet();
+  const seen = new Set([...save.seen, ...u]);
+  for (const e of [build.torso, ...build.heads, ...build.hands, ...build.legs, ...build.tails]) {
+    seen.add(entryName(e));
+    if (entryPlugin(e)) seen.add(entryPlugin(e));
+  }
+  if (build.torsoPlugin) seen.add(build.torsoPlugin);
+  const KINDS = [["torso", "躯干"], ["head", "头"], ["hand", "手"], ["leg", "腿"], ["tail", "尾巴"], ["slot", "扩展插槽"]];
+  let total = 0, got = 0, html = "";
+  const item = (n, revealed, statText, lockText) => {
+    if (!revealed) return `<div class="dexit unk">${thumbHTML(n, false)}<div class="m"><div class="nm">???</div><div class="st">还没遇到过</div></div></div>`;
+    return `<div class="dexit">${thumbHTML(n)}<div class="m"><div class="nm">${n}</div><div class="st">${statText}${lockText}</div></div></div>`;
+  };
+  for (const [kind, label] of KINDS) {
+    const names = CAT_BY_KIND[kind] || [];
+    if (!names.length) continue;
+    total += names.length;
+    const cells = names.map((n) => {
+      const revealed = seen.has(n);
+      if (revealed) got++;
+      return item(n, revealed, statStr(n), u.has(n) ? "" : " · 🔒战役解锁");
+    }).join("");
+    html += `<div class="gtitle" style="margin-top:12px">${label}</div><div class="dexgrid">${cells}</div>`;
+  }
+  const plugs = Object.entries(E.PLUGINS);
+  total += plugs.length;
+  const pcells = plugs.map(([n, s]) => {
+    const revealed = seen.has(n);
+    if (revealed) got++;
+    return item(n, revealed, `${PLUG_DESC[n] || ""} · 💰${s.price}`, u.has(n) ? "" : " · 🔒战役解锁");
+  }).join("");
+  html += `<div class="gtitle" style="margin-top:12px">插件</div><div class="dexgrid">${pcells}</div>`;
+  $("dexCount").textContent = `已发现 ${got}/${total}`;
+  $("dexBody").innerHTML = html;
+}
 
 // ===== 战役 =====
 function enemySummary(spec) {
@@ -984,7 +1149,7 @@ window.wildFight = () => {
 };
 $("resetCamp").onclick = () => {
   if (!confirm("重置战役进度和配装?")) return;
-  save = { cleared: [], build: null };
+  save = { cleared: [], build: null, name: save.name, seen: [] };   // 名字是身份,重置进度不清名
   persist();
   build = starterBuild();
   renderBuild();
@@ -1335,11 +1500,12 @@ function startBattle(seed, campLevel) {
   tutFired = new Set();
   curSeed = seed == null ? Math.floor(Math.random() * 1e9) : seed;
   curCamp = campLevel || null;
-  const specA = Object.assign({ name: "我的怪兽" }, build);
+  const specA = Object.assign({ name: monName() }, build);
   const specB = campLevel
     ? Object.assign({ name: `第${campLevel.lv}关·${campLevel.name}` }, campLevel.enemy)
     : Object.assign({ name: enemySel.value }, E.ARCHETYPES[enemySel.value]);
   const a = E.makeMonster(specA.name, specA), b = E.makeMonster(specB.name, specB);
+  markSeen(monsterSeenNames(b));   // 对手用过的零件进图鉴"见过"
   // 关卡主题布景:战役按关卡定,荒野=戈壁/Boss=巢穴,自由对战用默认夜色
   const THEME_BY_LV = { 1: "forest", 2: "snow", 3: "dusk", 4: "swamp" };
   const stEl = document.querySelector("#pgFight .stage");
