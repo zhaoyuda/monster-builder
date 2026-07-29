@@ -694,6 +694,22 @@ class TestBatch2(unittest.TestCase):
         self.assertEqual(len(ticks), 2, "双方各扣 5")
         self.assertTrue(all(t["dmg"] == 5 for t in ticks))
 
+    def test_触手_优先缠手(self):
+        # Akun 2026-07-27 批注:有手必缠手(头/腿在池里也不选)
+        a = mkp("A", hands=["触手"])
+        b = mkp("B", torso="稍微长大的躯干", heads=["新手头"], hands=["新手手"], legs=["踢腿"])
+        for r in (0.0, 0.5, 0.99):
+            rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([r]))
+            ent = self._events(rep, "entangle")
+            self.assertEqual(ent[0]["target"], "新手手(手1)", f"rng={r} 应缠手")
+
+    def test_触手_无手可缠回退头腿(self):
+        a = mkp("A", hands=["触手"])
+        b = mkp("B", torso="稍微长大的躯干", legs=["踢腿"])
+        rep = battle(a, b, cfg=RuleConfig(round_limit=1), rng=ScriptRNG([0.5]))
+        ent = self._events(rep, "entangle")
+        self.assertEqual(ent[0]["target"], "踢腿(腿1)")
+
     def test_触手_一方死亡另一方解脱(self):
         a = mkp("A", hands=["触手"])
         a.hands[0].hp = 3

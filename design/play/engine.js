@@ -594,8 +594,15 @@
         if (!tent.tentacle || !alive(tent)) continue;
         const ek = enemyKey(key);
         const em = sides[ek];
-        let pool = [...em.heads, ...em.hands, ...em.legs].filter((p) => alive(p) && p.entangledLeft <= 0);
-        if (!pool.length) pool = [...em.heads, ...em.hands, ...em.legs].filter(alive);
+        // Akun 2026-07-27 批注:优先缠手(手是攻击+格挡核心);没手可缠再退回头/腿
+        const free = [...em.heads, ...em.hands, ...em.legs].filter((p) => alive(p) && p.entangledLeft <= 0);
+        const freeHands = free.filter((p) => em.hands.includes(p));
+        let pool = freeHands.length ? freeHands : free;
+        if (!pool.length) {
+          const all = [...em.heads, ...em.hands, ...em.legs].filter(alive);
+          const allHands = all.filter((p) => em.hands.includes(p));
+          pool = allHands.length ? allHands : all;
+        }
         if (!pool.length) continue;
         const victim = choice(pool);
         tent.entangledLeft = victim.entangledLeft = ENTANGLE_ROUNDS;

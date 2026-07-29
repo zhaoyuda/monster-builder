@@ -44,6 +44,8 @@ class RuleConfig:
     crit_mult: float = 2.0               # 暴击伤害倍率(Akun 定了各头暴击率,倍率暂 2x;1.0=关闭暴击)
     block_overflow: bool = False         # 格挡溢出提案(耗材手流修法A,待 Akun):格挡手血量不够时,
                                          #   吃不下的伤害继续打原目标——废掉"1血手吞整发重击"
+    entangle_prefer_hand: bool = True    # Akun 2026-07-27 批注:触手战吼优先缠手(手是攻防核心);
+                                         #   False=旧口径,头/手/腿全池随机(A/B 用)
     status_slots: str = "multi"          # multi=异常状态可共存(现行) / single=每部件仅一个状态栏位,
                                          #   新状态顶掉旧状态(Akun Q19b 候选方案,A/B 用)
 
@@ -506,10 +508,15 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
             if not tent.tentacle or not tent.alive():
                 continue
             ek = enemy_key(key)
-            pool = [p for p in (*sides[ek].heads, *sides[ek].hands, *sides[ek].legs)
+            free = [p for p in (*sides[ek].heads, *sides[ek].hands, *sides[ek].legs)
                     if p.alive() and p.entangled_left <= 0]
+            # Akun 2026-07-27 批注:优先缠手(手是攻击+格挡核心);没手可缠再退回头/腿
+            ehands = sides[ek].hands
+            prefer = (lambda ps: [p for p in ps if any(p is h for h in ehands)] or ps) \
+                if cfg.entangle_prefer_hand else (lambda ps: ps)
+            pool = prefer(free)
             if not pool:
-                pool = [p for p in (*sides[ek].heads, *sides[ek].hands, *sides[ek].legs) if p.alive()]
+                pool = prefer([p for p in (*sides[ek].heads, *ehands, *sides[ek].legs) if p.alive()])
             if not pool:
                 continue
             victim = rng.choice(pool)

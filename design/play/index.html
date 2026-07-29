@@ -135,8 +135,10 @@
       radial-gradient(160px 66px at 94% 100%, var(--hillB) 60%, transparent 61%); }
   .stage::after { /* 地面 */ content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 18px; z-index: 0; pointer-events: none;
     background: linear-gradient(180deg, var(--gnd1), var(--gnd2)); border-top: 1px solid var(--gline); }
-  .doll { display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; z-index: 1; }
-  .doll::before { /* 脚下投影 */ content: ""; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); width: 78%; height: 10px; border-radius: 50%; pointer-events: none;
+  /* 锚点组合纸偶:定尺容器 + 部件绝对定位叠贴成一只(头压顶/手接侧/腿插底/尾接后) */
+  .doll { position: relative; z-index: 1; width: 156px; height: 178px; }
+  .doll .dpart { position: absolute; transform: translate(-50%, 50%) var(--dtf, ); }
+  .doll::before { /* 脚下投影 */ content: ""; position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); width: 74%; height: 10px; border-radius: 50%; pointer-events: none;
     background: radial-gradient(50% 50% at 50% 50%, rgba(0, 0, 0, .5), transparent 70%); }
   /* 待机呼吸:整只轻微起伏,双方错拍;出手动画(inline style)期间自动让位,倒地停 */
   @keyframes breatheK { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.024) scaleX(.994); } }
@@ -150,10 +152,11 @@
   .dpart.hand { width: 20px; height: 20px; border-radius: 7px 7px 10px 4px; }
   .dpart.leg  { width: 13px; height: 27px; border-radius: 5px 5px 6px 6px; }
   .dpart.torso{ width: 62px; height: 54px; border-radius: 16px 16px 20px 20px; }
-  .dpart.tail { width: 22px; height: 12px; border-radius: 2px 12px 12px 2px; transform: skewX(-18deg); align-self: center; }
+  .dpart.tail { width: 22px; height: 12px; border-radius: 2px 12px 12px 2px; --dtf: skewX(-18deg); }
   .dpart.deco { border-style: dashed; opacity: .8; }
   .dpart .eye { position: absolute; top: 7px; left: 6px; width: 5px; height: 5px; border-radius: 50%; background: #14121f; box-shadow: 9px 0 0 #14121f; }
-  .dpart.dead { filter: grayscale(1); opacity: .3; transform: rotate(22deg) translateY(5px); }
+  .dpart.far { filter: brightness(.82); }   /* 远侧手/腿:压暗一档分景深 */
+  .dpart.dead.dead { filter: grayscale(1); opacity: .3; --dtf: rotate(22deg) translateY(5px); }
   /* 零件图纸偶:有图的零件用 PNG(parts-side-v1),没图的沿用色块兜底 */
   .dpart.art { background: none; border: none; box-shadow: none; border-radius: 0; }
   .dpart.art img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
@@ -161,7 +164,7 @@
   .dpart.art.hand { width: 32px; height: 32px; }
   .dpart.art.leg  { width: 24px; height: 38px; }
   .dpart.art.torso{ width: 84px; height: 76px; }
-  .dpart.art.tail { width: 36px; height: 24px; transform: none; }
+  .dpart.art.tail { width: 36px; height: 24px; --dtf: translate(0); }
   .dpart.art img.spore { filter: hue-rotate(115deg) saturate(.9); }   /* 芽孢长出来的手:复用本体图调绿 */
   /* PVE 生物图标(整只动物当躯干,五官另挂):比零件纸偶大一号 */
   .dpart.art.creature.torso { width: 104px; height: 92px; }
@@ -222,7 +225,7 @@
   .dpart.ghost.head { width: 36px; height: 36px; border-radius: 50%; }
   .dpart.ghost.hand { width: 32px; height: 32px; }
   .dpart.ghost.leg  { width: 24px; height: 38px; }
-  .dpart.ghost.tail { width: 36px; height: 24px; transform: none; }
+  .dpart.ghost.tail { width: 36px; height: 24px; --dtf: translate(0); }
   .buildHint { text-align: center; font-size: 12px; color: var(--dim); margin-bottom: 8px; }
   /* 开场 VS 报幕(瞬间挡不放) */
   .vswrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; z-index: 9; pointer-events: none; background: rgba(10, 8, 20, .38); }
@@ -559,43 +562,80 @@ function thumbHTML(name, revealed = true) {
   if (cat) return `<span class="thumb" style="background:${partColor({ name, kind: cat.kind })}"></span>`;
   return `<span class="thumb" style="background:#3a3355">🔌</span>`;   // 插件无图
 }
-function dollPartHTML(p, sideKey, oc = "") {
+// 锚点表:部件中心在纸偶容器里的位置(cx=宽度百分比,cy=距底 px,z=层级,far=远侧压暗)
+// 容器 156×178,与 .doll 的 CSS 尺寸一致;faceL 侧整体左右镜像
+function anchorPos(kind, i, n, faceL) {
+  let cx, cy, z, far = false;
+  if (kind === "torso") { cx = 50; cy = 76; z = 3; }
+  else if (kind === "head") {
+    const off = i - (n - 1) / 2, step = n > 3 ? 17 : 24;
+    cx = 50 + off * step;
+    cy = 123 - Math.abs(off) * 4;                       // 多头排成轻微弧线
+    z = 5;
+  } else if (kind === "hand") {
+    const pair = Math.floor(i / 2), near = i % 2 === 0;   // 偶数只在近侧(朝向那一面)
+    cx = near ? 71 + pair * 8 : 29 - pair * 8;
+    cy = 88 - pair * 23;
+    far = !near; z = near ? 4 : 2;
+  } else if (kind === "leg") {
+    const off = i - (n - 1) / 2;
+    cx = 50 + off * (n > 3 ? 16 : 20);
+    cy = 26; far = i % 2 === 1; z = far ? 2 : 4;
+  } else { cx = 14; cy = 62; z = 1; }                     // 尾巴接在身后
+  if (faceL) cx = 100 - cx;
+  return { cx, cy, z, far };
+}
+function anchorStyle(kind, i, n, faceL) {
+  const a = anchorPos(kind, i, n, faceL);
+  return `left:${a.cx}%;bottom:${a.cy}px;z-index:${a.z};`;
+}
+function dollPartHTML(p, sideKey, oc = "", pos = "") {
   const deco = p.name.startsWith("装饰") ? " deco" : "";
   const key = p.kind === "torso" ? p.name : E.label(p);
   const art = PART_ART[p.name];
   const click = oc ? ` onclick="${oc}"` : "";
+  const far = pos.far ? " far" : "";
+  const st = pos.style || "";
   if (art) {
     const spore = p.name === "芽孢长出来的手" ? ' class="spore"' : "";
     const src = art.startsWith("../") ? art : ART_BASE + art;   // 生物图标存 creatures/,零件图存 parts-side-v1/
     const creature = p.pve ? " creature" : "";
-    return `<div class="dpart art ${p.kind}${deco}${creature}" data-dk="${sideKey}|${key}" title="${key}"${click}><img src="${src}" alt="${key}" draggable="false"${spore}></div>`;
+    return `<div class="dpart art ${p.kind}${deco}${creature}${far}" data-dk="${sideKey}|${key}" title="${key}"${click} style="${st}"><img src="${src}" alt="${key}" draggable="false"${spore}></div>`;
   }
   const eye = p.kind === "head" ? '<i class="eye"></i>' : "";
-  return `<div class="dpart ${p.kind}${deco}" data-dk="${sideKey}|${key}" title="${key}"${click} style="background:${partColor(p)}">${eye}</div>`;
+  return `<div class="dpart ${p.kind}${deco}${far}" data-dk="${sideKey}|${key}" title="${key}"${click} style="${st}background:${partColor(p)}">${eye}</div>`;
 }
 function dollHTML(m, sideKey, edit = false) {
   // edit=装配台模式:部件可点(换插件/拆下),空位画虚线 + 号就地添加
   const oc = (key, i) => (edit ? `buildPartClick('${key}',${i})` : "");
-  const ghost = (kind, label) => `<div class="dpart ghost ${kind}" onclick="openSheet('${kind}')" title="添加${label}">+${label[0]}</div>`;
-  let gHead = "", gHand = "", gLeg = "", gTail = "";
+  const faceL = sideKey === "B";
+  // 编辑态的 + 号占用「下一个」锚点位,已装部件按含加号的总数重排,加件时布局平滑推开
+  let addHead = false, addHand = false, addLeg = false, addTail = false;
   if (edit) {   // 剩余容量才亮加号(与 renderBuild 的槽位口径一致)
     const headSlots = 1 + build.slots.filter((s) => entryName(s) === "头部插槽").length;
     const limbSlots = 4 + build.slots.filter((s) => entryName(s) === "四肢插槽").length;
     const limbUsed = build.hands.length + build.legs.length;
-    if (build.heads.length < headSlots) gHead = ghost("head", "头");
-    if (limbUsed < limbSlots) { gHand = ghost("hand", "手"); gLeg = ghost("leg", "腿"); }
-    if (build.tails.length < 1) gTail = ghost("tail", "尾巴");
+    addHead = build.heads.length < headSlots;
+    addHand = addLeg = limbUsed < limbSlots;
+    addTail = build.tails.length < 1;
   }
-  const heads = m.heads.map((p, i) => dollPartHTML(p, sideKey, oc("heads", i))).join("");
-  const hands = m.hands.map((p, i) => dollPartHTML(p, sideKey, oc("hands", i)));
-  const half = Math.ceil(hands.length / 2);
-  const tails = m.tails.map((p, i) => dollPartHTML(p, sideKey, oc("tails", i))).join("");
-  const legs = m.legs.map((p, i) => dollPartHTML(p, sideKey, oc("legs", i))).join("");
-  const torso = dollPartHTML(m.torso, sideKey, edit ? "openSheet('torso')" : "");
-  return `<div class="doll${sideKey === "B" ? " faceL" : ""}" id="doll${sideKey}In">
-    <div class="drow">${heads}${gHead}</div>
-    <div class="drow dmid">${hands.slice(0, half).join("")}${torso}${hands.slice(half).join("")}${gHand}${tails}${gTail}</div>
-    <div class="drow">${legs}${gLeg}</div>
+  const ghost = (kind, label, i, n) =>
+    `<div class="dpart ghost ${kind}" onclick="openSheet('${kind}')" title="添加${label}"
+      style="${anchorStyle(kind, i, n, faceL)}">+${label[0]}</div>`;
+  const lay = (list, kind, bkey, add) => {
+    const n = list.length + (add ? 1 : 0);
+    const parts = list.map((p, i) => dollPartHTML(p, sideKey, oc(bkey, i),
+      { style: anchorStyle(kind, i, n, faceL), far: anchorPos(kind, i, n, faceL).far })).join("");
+    return parts + (add ? ghost(kind, { head: "头", hand: "手", leg: "腿", tail: "尾巴" }[kind], n - 1, n) : "");
+  };
+  const torso = dollPartHTML(m.torso, sideKey, edit ? "openSheet('torso')" : "",
+    { style: anchorStyle("torso", 0, 1, faceL) });
+  return `<div class="doll${faceL ? " faceL" : ""}" id="doll${sideKey}In">
+    ${lay(m.tails, "tail", "tails", addTail)}
+    ${lay(m.legs, "leg", "legs", addLeg)}
+    ${torso}
+    ${lay(m.hands, "hand", "hands", addHand)}
+    ${lay(m.heads, "head", "heads", addHead)}
   </div>`;
 }
 function dollEl(sideKey, key) {
@@ -688,7 +728,7 @@ function debrisFly(sideKey, key, ft) {   // 击破飞散:克隆视觉节点抛�
   c.querySelectorAll(".fxlabel, .impact").forEach((n) => n.remove());
   c.classList.remove("hitfx", "dead");
   c.classList.add("debris");
-  c.style.cssText += `;left:${er.left - sr.left}px;top:${er.top - sr.top}px;width:${er.width}px;height:${er.height}px;margin:0;`;
+  c.style.cssText += `;position:absolute;bottom:auto;right:auto;left:${er.left - sr.left}px;top:${er.top - sr.top}px;width:${er.width}px;height:${er.height}px;margin:0;`;
   st.appendChild(c);
   const dx = (sideKey === "A" ? -1 : 1) * (26 + Math.random() * 26);
   const rot = (Math.random() < .5 ? -1 : 1) * (120 + Math.random() * 100);

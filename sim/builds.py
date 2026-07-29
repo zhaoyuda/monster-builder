@@ -55,7 +55,15 @@ def validate(m: Monster):
     # Q2 槽位约束;尾巴独立位不占四肢槽(Q9)
     head_slots = 1 + sum(1 for s in m.slots if s.name == "头部插槽")
     limb_slots = 4 + sum(1 for s in m.slots if s.name == "四肢插槽")
-    assert len(m.heads) <= head_slots, f"{m.name}: 头槽超限 {len(m.heads)}>{head_slots}"
+    # Q22i 尾巴上的头:骑在尾巴上占其插件位,不占头槽;需已装尾巴、与属性尾巴插件互斥、限 1
+    tail_heads = [h for h in m.heads if h.tail_head]
+    assert len(tail_heads) <= 1, f"{m.name}: 「尾巴上的头」限 1 个"
+    if tail_heads:
+        assert m.tails, f"{m.name}: 「尾巴上的头」需要先装备一条尾巴"
+        assert not any(t.plugin for t in m.tails), \
+            f"{m.name}: 装了尾巴插件的尾巴不能再装「尾巴上的头」"
+    n_heads = len(m.heads) - len(tail_heads)
+    assert n_heads <= head_slots, f"{m.name}: 头槽超限 {n_heads}>{head_slots}"
     n_limbs = len(m.hands) + len(m.legs)
     assert n_limbs <= limb_slots, f"{m.name}: 四肢槽超限 {n_limbs}>{limb_slots}"
     assert len(m.tails) <= 1, f"{m.name}: 尾巴独立位暂限 1 条(上限待 Akun 定)"

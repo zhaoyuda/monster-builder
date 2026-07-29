@@ -85,6 +85,16 @@ def apply_variant(variant):
         # Q19b A/B(Akun 2026-07-21 反问):异常状态单栏位(新顶旧) vs 共存(现行)
         # 采样池同 mech(插件挂载),规则改 status_slots=single
         return RuleConfig(status_slots="single")
+    elif variant == "batch2_tent_rand":
+        # A/B:触手战吼旧口径(全池随机)vs Akun 2026-07-27 拍板的「优先缠手」(现行默认)
+        TORSOS.extend(["强能躯干", "臃肿的躯干"])
+        LEGS.extend(["闪避腿", "高鞭腿", "连环腿", "黏腿", "震撼腿"])
+        MECH_HEADS.extend(["喷毒头", "喷冰头", "伸缩头", "蓄力头"])
+        MECH_HANDS.extend(["刺拳手", "触手", "蓄力拳", "残像拳"])
+        PLUGINS_BY_KIND["head"] = PLUGINS_BY_KIND["head"] + ["头槌"]
+        PLUGINS_BY_KIND["hand"] = PLUGINS_BY_KIND["hand"] + ["认真一拳"]
+        PLUGINS_BY_KIND["leg"] = PLUGINS_BY_KIND["leg"] + ["先守后攻"]
+        return RuleConfig(entangle_prefer_hand=False)
     elif variant == "batch2a":
         # Akun 2026-07-22 第二批纯数值件探针:新躯干×2(⚠️ 臃肿指挥4=敏感参数)+ 闪避腿
         TORSOS.extend(["强能躯干", "臃肿的躯干"])
@@ -235,13 +245,13 @@ def main():
     ap.add_argument("--variant", default="baseline",
                     choices=["baseline", "muscle2", "atk15", "hand125", "combo", "mech",
                              "init_once", "dodge_all", "legmob", "leg50", "leg_hunt", "leg_fix",
-                             "mech_status1", "batch2a", "batch2"])
+                             "mech_status1", "batch2a", "batch2", "batch2_tent_rand"])
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
 
     cfg = apply_variant(args.variant)
     rng = random.Random(args.seed)
-    mech = args.variant in ("mech", "mech_status1", "batch2")
+    mech = args.variant in ("mech", "mech_status1", "batch2", "batch2_tent_rand")
     specs = dedupe([gen_spec(rng, mech) for _ in range(SAMPLE)])
     mons = [build(s) for s in specs]
     n = len(specs)
