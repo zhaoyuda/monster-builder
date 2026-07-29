@@ -94,6 +94,8 @@ def apply_variant(variant):
         PLUGINS_BY_KIND["head"] = PLUGINS_BY_KIND["head"] + ["头槌"]
         PLUGINS_BY_KIND["hand"] = PLUGINS_BY_KIND["hand"] + ["认真一拳"]
         PLUGINS_BY_KIND["leg"] = PLUGINS_BY_KIND["leg"] + ["先守后攻"]
+        PLUGINS_BY_KIND["torso"] = PLUGINS_BY_KIND["torso"] + ["耐毒皮肤", "耐冰皮肤"]
+        PLUGINS_BY_KIND["tail"] = ["火蜥蜴尾巴", "毒蛇尾巴", "冰虫尾巴"]
         return RuleConfig(entangle_prefer_hand=False)
     elif variant == "batch2a":
         # Akun 2026-07-22 第二批纯数值件探针:新躯干×2(⚠️ 臃肿指挥4=敏感参数)+ 闪避腿
