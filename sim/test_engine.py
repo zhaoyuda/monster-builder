@@ -793,5 +793,28 @@ class TestBatch2(unittest.TestCase):
         self.assertEqual(mkp("A", tails=[("新手尾巴", "冰虫尾巴")]).initiative_total(), 2, "尾巴1+冰虫1")
 
 
+
+class 升本(unittest.TestCase):
+    """躯干进化(Q18d 提案阶段,数值未拍板)——只测机制接线,不测平衡。"""
+
+    def test_升本加供能指挥且计价(self):
+        base = mkp("A", torso="新手躯干", hands=["新手手"])
+        up = mkp("B", torso="新手躯干", hands=["新手手"])
+        up.tier = 3
+        tb = up.tier_bonus()
+        self.assertEqual(up.supply_total() - base.supply_total(), tb["supply"])
+        self.assertEqual(up.command_supply() - base.command_supply(), tb["command"])
+        self.assertEqual(up.price_total() - base.price_total(), tb["price"])
+        # 护栏:升本不加血
+        self.assertEqual(up.torso.max_hp, base.torso.max_hp)
+
+    def test_升本放宽槽位(self):
+        from sim.builds import build
+        # 5 条四肢在 tier1 需要买 1 个四肢插槽;tier2 送 1 个槽,直接装得下
+        with self.assertRaises(AssertionError):
+            build("超编", "稍微长大的躯干", hands=["新手手"] * 5)
+        m = build("升本", "稍微长大的躯干", hands=["新手手"] * 5, tier=2)
+        self.assertEqual(m.tier, 2)
+
 if __name__ == "__main__":
     unittest.main()

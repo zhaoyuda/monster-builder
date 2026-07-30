@@ -29,6 +29,15 @@ RESIST_SKIN = {"fire": "耐火皮肤", "poison": "耐毒皮肤", "ice": "耐冰�
 RESIST_TAIL = {"fire": "火蜥蜴尾巴", "poison": "毒蛇尾巴", "ice": "冰虫尾巴"}  # 尾巴插件:对应伤害 -20%(可与皮肤叠乘)
 
 
+# 躯干进化(升本)—— Q18d 提案阶段,数值未经 Akun 拍板,仅用于模拟评估。
+# 每档写的是「相对上一档」的增量;Monster.tier_bonus() 累加。刻意不加血(见 tier_bonus 注释)。
+TORSO_TIERS = {
+    1: dict(price=0,   supply=0,  limb=0, head=0, command=0),
+    2: dict(price=300, supply=15, limb=1, head=0, command=0),
+    3: dict(price=550, supply=15, limb=0, head=1, command=1),
+}
+
+
 @dataclass
 class RuleConfig:
     initiative_mode: str = "per_round"   # per_round=每回合重掷(v2 原文倾向) / once=开局掷一次(评审建议 A/B 项)
@@ -59,6 +68,15 @@ class Monster:
     legs: list = field(default_factory=list)
     tails: list = field(default_factory=list)
     slots: list = field(default_factory=list)   # 四肢插槽/头部插槽:只占预算、扩槽位,不参战
+    tier: int = 1    # 躯干进化档(升本,Q18d 提案阶段):1=未升本。数值见 TORSO_TIERS
+
+    def tier_bonus(self) -> dict:
+        # 升本累计加成(不加血——血在价格公式里全额计价,白送血就不是真取舍了)
+        b = dict(price=0, supply=0, limb=0, head=0, command=0)
+        for t in range(2, self.tier + 1):
+            for k, v in TORSO_TIERS[t].items():
+                b[k] += v
+        return b
 
     def parts_of(self, kind: str) -> list:
         return {"head": self.heads, "hand": self.hands, "leg": self.legs}[kind]
@@ -80,7 +98,8 @@ class Monster:
 
     def command_supply(self) -> int:
         # 躯干基础指挥 + 存活头的指挥(头死指挥点即时消失 → 下回合肢体行动力下降)
-        return self.torso.command + sum(h.command for h in self.heads if h.alive())
+        return (self.torso.command + self.tier_bonus()["command"]
+                + sum(h.command for h in self.heads if h.alive()))
 
     def energy_used(self) -> int:
         return sum(p.energy for p in self.all_parts() if p.kind != "torso") \
@@ -88,12 +107,13 @@ class Monster:
 
     def supply_total(self) -> int:
         # 躯干供能 + 供能类插件(普通能量核心——躯干"身体"位插件)
-        return (self.torso.supply
+        return (self.torso.supply + self.tier_bonus()["supply"]
                 + sum(s.supply for s in self.slots)
                 + sum(PLUGINS[p.plugin].get("supply", 0) for p in self.all_parts() if p.plugin))
 
     def price_total(self) -> int:
-        return (sum(p.price for p in self.all_parts())
+        return (self.tier_bonus()["price"]
+                + sum(p.price for p in self.all_parts())
                 + sum(t.price for t in self.tails)
                 + sum(s.price for s in self.slots)
                 + sum(PLUGINS[p.plugin]["price"] for p in self.all_parts() if p.plugin))

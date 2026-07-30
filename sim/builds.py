@@ -16,8 +16,9 @@ def _mk(entry, i):
     return make(entry, i + 1)
 
 
-def build(name, torso, heads=(), hands=(), legs=(), tails=(), slots=(), torso_plugin=""):
+def build(name, torso, heads=(), hands=(), legs=(), tails=(), slots=(), torso_plugin="", tier=1):
     m = Monster(
+        tier=tier,
         name=name,
         torso=make(torso, 0, torso_plugin),
         heads=[_mk(n, i) for i, n in enumerate(heads)],
@@ -53,8 +54,9 @@ def validate(m: Monster):
     used, supply = m.energy_used(), m.supply_total()
     assert used <= supply, f"{m.name}: 能量超限 {used}>{supply}"
     # Q2 槽位约束;尾巴独立位不占四肢槽(Q9)
-    head_slots = 1 + sum(1 for s in m.slots if s.name == "头部插槽")
-    limb_slots = 4 + sum(1 for s in m.slots if s.name == "四肢插槽")
+    tb = m.tier_bonus()
+    head_slots = 1 + tb["head"] + sum(1 for s in m.slots if s.name == "头部插槽")
+    limb_slots = 4 + tb["limb"] + sum(1 for s in m.slots if s.name == "四肢插槽")
     # Q22i 尾巴上的头:骑在尾巴上占其插件位,不占头槽;需已装尾巴、与属性尾巴插件互斥、限 1
     tail_heads = [h for h in m.heads if h.tail_head]
     assert len(tail_heads) <= 1, f"{m.name}: 「尾巴上的头」限 1 个"
