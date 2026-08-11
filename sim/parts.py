@@ -43,6 +43,7 @@ class Part:
     pve: bool = False  # PVE 专属敌方部件,不可用于玩家配装(builds.validate 拦截)
     price: int = 0
     slot: int = 0      # 同类内槽位编号,从 1 开始
+    ptag: str = ""     # 站位原型攻击标签(实验,未拍板):"break"=优先打对方守护手 / "bypass"=无视守护
     # ---- 以下为战斗运行时状态,battle() 内部维护,装配时不用管 ----
     burn: dict = None      # 灼烧 {"left": 剩余回合, "src": 来源部件}(每回合掉 2 部件血,刷新不叠加)
     tear: dict = None      # 撕裂 同上(撕裂爪 5 回合 / 尖刺皮肤 2 回合)

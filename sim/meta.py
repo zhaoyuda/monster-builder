@@ -101,6 +101,26 @@ def apply_variant(variant):
         # Akun 2026-07-22 第二批纯数值件探针:新躯干×2(⚠️ 臃肿指挥4=敏感参数)+ 闪避腿
         TORSOS.extend(["强能躯干", "臃肿的躯干"])
         LEGS.append("闪避腿")
+    elif variant in ("pos1", "pos2", "pos3"):
+        # 站位原型 A/B(2026-08-11,设计套路报告 E 条;未拍板,demo 未接入):
+        #   pos1 = 对位索敌(同类随机 → 攻击者槽位对位,确定性)
+        #   pos2 = pos1 + 前位守护(1 号位存活手拦截指向头/躯干的单体攻击)
+        #   pos3 = pos2 + 攻击标签(触手/抓握手=bypass 无视守护;连环腿=break 优先拆守护者)
+        # 零件池逐行同 batch2(07-29 教训:A/B 变体必须逐行复制基准池)
+        TORSOS.extend(["强能躯干", "臃肿的躯干"])
+        LEGS.extend(["闪避腿", "高鞭腿", "连环腿", "黏腿", "震撼腿"])
+        MECH_HEADS.extend(["喷毒头", "喷冰头", "伸缩头", "蓄力头"])
+        MECH_HANDS.extend(["刺拳手", "触手", "蓄力拳", "残像拳"])
+        PLUGINS_BY_KIND["head"] = PLUGINS_BY_KIND["head"] + ["头槌"]
+        PLUGINS_BY_KIND["hand"] = PLUGINS_BY_KIND["hand"] + ["认真一拳"]
+        PLUGINS_BY_KIND["leg"] = PLUGINS_BY_KIND["leg"] + ["先守后攻"]
+        PLUGINS_BY_KIND["torso"] = PLUGINS_BY_KIND["torso"] + ["耐毒皮肤", "耐冰皮肤"]
+        PLUGINS_BY_KIND["tail"] = ["火蜥蜴尾巴", "毒蛇尾巴", "冰虫尾巴"]
+        if variant == "pos3":
+            CATALOG["触手"]["ptag"] = "bypass"
+            CATALOG["抓握手"]["ptag"] = "bypass"
+            CATALOG["连环腿"]["ptag"] = "break"
+        return RuleConfig(positional=True, guard_front=(variant != "pos1"))
     elif variant == "batch2":
         # 第二批全量(机制件+插件都进池;尾巴上的头因需配对尾巴暂不进随机池,单独手测)
         TORSOS.extend(["强能躯干", "臃肿的躯干"])
@@ -242,18 +262,96 @@ def diversity_stats(specs):
             f"最依赖件 {top_part}({top_n}/{n} 配装)")
 
 
+def cycle_stats(top, pair_win, games):
+    """非传递性 KPI:决赛圈里有多少「A 克 B、B 克 C、C 克 A」的三元环。
+
+    为什么要量这个:流派(archetype)的定义不是「有几种配装能赢」,而是
+    「有几条互相克制的取胜路径」。如果强度是一条全序链(谁都打得过下面的、
+    打不过上面的),那多样性只是次优解的排队,玩家最终只会抄第一名——
+    炉石那种「快攻克后期、后期克中速、中速克快攻」的手感来自环,不来自排名。
+
+    判定:A 对 B 胜率 > DOM 视为「A 克 B」;数有向三元环。
+    附带给出「决定性对局占比」(明显克制的对子有多少),环少但决定性对局也少
+    = 大家互相五五开(平但无个性),和全序是两种不同的病。"""
+    DOM = 0.60
+    beats = {a: set() for a in top}
+    decisive = 0
+    pairs = 0
+    for a in top:
+        for b in top:
+            if a >= b:
+                continue
+            pairs += 1
+            wr = pair_win[(a, b)] / games
+            if wr > DOM:
+                beats[a].add(b); decisive += 1
+            elif wr < 1 - DOM:
+                beats[b].add(a); decisive += 1
+    cycles = 0
+    for a in top:
+        for b in beats[a]:
+            for c in beats[b]:
+                if a in beats[c]:
+                    cycles += 1
+    cycles //= 3   # 每个环被三个起点各数一次
+    # 光看环的绝对个数会骗人:随便一张随机胜负图都有一堆环。基准是"完全随机"——
+    # 三条边都分出胜负的三角形里,随机情况下 1/4 是环。观测/随机 = 非传递指数:
+    # 0% = 纯全序(一条强度链,只有一个维度),100% = 强度关系完全无法排序。
+    tri = 0
+    for a in top:
+        for b in top:
+            for c in top:
+                if a < b < c and all(x in beats[y] or y in beats[x]
+                                     for x, y in ((a, b), (b, c), (a, c))):
+                    tri += 1
+    idx = cycles / (0.25 * tri) if tri else 0.0
+    return (f"三元克制环 {cycles} 个 / 有效三角 {tri} 个 → 非传递指数 {idx:.0%},"
+            f"决定性对局 {decisive}/{pairs}({decisive/pairs:.0%},判定线 >{DOM:.0%})")
+
+
+def bt_residual(top, pair_win, games, iters=300):
+    """一维性 KPI(sol 2026-08-01 建议,取代裸环计数当主指标):
+    用 Bradley-Terry 单强度模型拟合决赛圈对战矩阵,看平均残差(百分点)。
+    残差 ≈ 噪声底 → 胜负几乎完全被「一条强度链」解释(P1 病:只有强弱没有克制);
+    残差显著高于噪声底 → 存在单一强度讲不通的克制结构。
+    噪声底 = 就算世界真是一维的,二项抽样也会留下的期望残差 sqrt(2p(1-p)/(πn))。"""
+    import math
+    s = {i: 1.0 for i in top}
+    w = {i: 0.0 for i in top}
+    for (a, b), pw in pair_win.items():
+        w[a] += pw
+        w[b] += games - pw
+    for _ in range(iters):
+        new = {}
+        for i in top:
+            denom = sum(games / (s[i] + s[j]) for j in top if j != i)
+            new[i] = (w[i] / denom) if (denom and w[i] > 0) else 1e-6
+        g = sum(new.values()) / len(new)
+        s = {i: v / g for i, v in new.items()}
+    resid, noise = [], []
+    for (a, b), pw in pair_win.items():
+        p_obs = pw / games
+        p_hat = s[a] / (s[a] + s[b])
+        resid.append(abs(p_obs - p_hat))
+        noise.append(math.sqrt(2 * p_hat * (1 - p_hat) / (math.pi * games)))
+    return (f"BT 单强度模型平均残差 {100*sum(resid)/len(resid):.1f}pp"
+            f"(纯一维噪声底 ≈{100*sum(noise)/len(noise):.1f}pp)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="baseline",
                     choices=["baseline", "muscle2", "atk15", "hand125", "combo", "mech",
                              "init_once", "dodge_all", "legmob", "leg50", "leg_hunt", "leg_fix",
-                             "mech_status1", "batch2a", "batch2", "batch2_tent_rand"])
+                             "mech_status1", "batch2a", "batch2", "batch2_tent_rand",
+                             "pos1", "pos2", "pos3"])
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
 
     cfg = apply_variant(args.variant)
     rng = random.Random(args.seed)
-    mech = args.variant in ("mech", "mech_status1", "batch2", "batch2_tent_rand")
+    mech = args.variant in ("mech", "mech_status1", "batch2", "batch2_tent_rand",
+                            "pos1", "pos2", "pos3")
     specs = dedupe([gen_spec(rng, mech) for _ in range(SAMPLE)])
     mons = [build(s) for s in specs]
     n = len(specs)
@@ -275,17 +373,20 @@ def main():
 
     # 阶段2:前 TOP_N 循环赛(双方向)
     score = {i: 0.0 for i in top}
+    pair_win = {}
     for a in top:
         for b in top:
             if a >= b:
                 continue
+            pw = 0.0
             for g in range(STAGE2_GAMES // 2):
                 rep = battle(mons[a], mons[b], seed=battle_id, cfg=cfg); battle_id += 1
-                score[a] += 1.0 if rep["winner"] == "A" else (0.5 if rep["winner"] == "draw" else 0.0)
-                score[b] += 1.0 if rep["winner"] == "B" else (0.5 if rep["winner"] == "draw" else 0.0)
+                ga = 1.0 if rep["winner"] == "A" else (0.5 if rep["winner"] == "draw" else 0.0)
+                score[a] += ga; score[b] += 1.0 - ga; pw += ga
                 rep = battle(mons[b], mons[a], seed=battle_id, cfg=cfg); battle_id += 1
-                score[b] += 1.0 if rep["winner"] == "A" else (0.5 if rep["winner"] == "draw" else 0.0)
-                score[a] += 1.0 if rep["winner"] == "B" else (0.5 if rep["winner"] == "draw" else 0.0)
+                gb = 1.0 if rep["winner"] == "A" else (0.5 if rep["winner"] == "draw" else 0.0)
+                score[b] += gb; score[a] += 1.0 - gb; pw += 1.0 - gb
+            pair_win[(a, b)] = pw
     games_each = (TOP_N - 1) * STAGE2_GAMES
     final = sorted(top, key=lambda i: -score[i])
 
@@ -300,6 +401,9 @@ def main():
     print(f"决赛圈前 10 构成:{comp_stats([specs[i] for i in final[:10]])}")
     print(f"决赛圈 40 强多样性:{diversity_stats([specs[i] for i in top])}")
     print(f"决赛圈前 10 多样性:{diversity_stats([specs[i] for i in final[:10]])}")
+    print(f"决赛圈 40 强非传递性:{cycle_stats(top, pair_win, STAGE2_GAMES)}")
+    print(f"决赛圈前 10 非传递性:{cycle_stats(final[:10], pair_win, STAGE2_GAMES)}")
+    print(f"决赛圈 40 强一维性:{bt_residual(top, pair_win, STAGE2_GAMES)}")
 
 
 if __name__ == "__main__":

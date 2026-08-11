@@ -816,5 +816,93 @@ class 升本(unittest.TestCase):
         m = build("升本", "稍微长大的躯干", hands=["新手手"] * 5, tier=2)
         self.assertEqual(m.tier, 2)
 
+class 站位原型(unittest.TestCase):
+    """站位实验(2026-08-11,设计套路报告 E 条;RuleConfig 默认全关,未拍板)——只测接线。
+    断言口径:攻击事件(hit/block/dodge)的 target 标签;用无腿配装排除闪避随机。"""
+
+    POS = dict(positional=True, guard_front=True)
+
+    def attacks_by(self, rep, side, attacker_label):
+        return [e for e in rep["events"]
+                if e["type"] in ("hit", "block", "dodge") and e.get("side") == side
+                and e.get("attacker") == attacker_label and not e.get("extra")]
+
+    def walk_assert(self, rep, side, attacker_label, expect_fn):
+        """沿事件流维护死亡集,对指定攻击者的每次单体攻击断言 expect_fn(dead)->合法目标集。"""
+        dead, checked = set(), 0
+        for e in rep["events"]:
+            if e["type"] == "break":
+                dead.add(e.get("part"))
+            if (e["type"] in ("hit", "block", "dodge") and e.get("side") == side
+                    and e.get("attacker") == attacker_label and not e.get("extra")):
+                self.assertIn(e["target"], expect_fn(dead),
+                              f"回合{e['round']} 目标 {e['target']} 不合法(已死:{dead})")
+                checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_对位索敌确定性(self):
+        # A 手1(槽位1)必打 B 手1;B 手1 死后顺延手2;都死了才打躯干。
+        a = mkp("A", hands=["猛爪", "新手手"])
+        b = mkp("B", hands=["新手手", "新手手"])
+        rep = battle(a, b, seed=5, cfg=RuleConfig(positional=True, block_prob=0.0))
+        h1, h2 = b.hands[0].label, b.hands[1].label
+
+        def expect(dead):
+            if h1 not in dead:
+                return {h1}
+            if h2 not in dead:
+                return {h2}
+            return {b.torso.label}
+        self.walk_assert(rep, "A", a.hands[0].label, expect)
+
+    def test_槽位环形顺延(self):
+        # 攻击者槽位 2,对方只剩槽位 1 存活 → 环形回到最前
+        a = mkp("A", hands=["新手手", "猛爪"])
+        b = mkp("B", hands=["新手手"])
+        rep = battle(a, b, seed=3, cfg=RuleConfig(positional=True, block_prob=0.0))
+        for e in self.attacks_by(rep, "A", a.hands[1].label):
+            self.assertIn(e["target"], (b.hands[0].label, b.torso.label))
+
+    def test_前位守护拦截头攻击(self):
+        # A 只有头(必打头/躯干);B 有守护手 → guard_front 开启时头攻击全部被手拦下
+        a = mkp("A", heads=["猛头"])
+        b = mkp("B", hands=["新手手", "新手手"], heads=["新手头"])
+        rep = battle(a, b, seed=9, cfg=RuleConfig(**self.POS, block_prob=0.0))
+        h1, h2 = b.hands[0].label, b.hands[1].label
+
+        def expect(dead):
+            alive_hands = {h for h in (h1, h2) if h not in dead}
+            if alive_hands:   # 有守护手 → 头攻击必须被拦到 1 号位存活手
+                return {min(alive_hands)}
+            return {b.heads[0].label, b.torso.label}   # 守护打光才许穿透
+        self.walk_assert(rep, "A", a.heads[0].label, expect)
+
+    def test_bypass_无视守护(self):
+        a = mkp("A", heads=["猛头"])
+        a.heads[0].ptag = "bypass"
+        b = mkp("B", hands=["新手手", "新手手"], heads=["新手头"])
+        rep = battle(a, b, seed=9, cfg=RuleConfig(**self.POS, block_prob=0.0))
+        hit_hand = [e for e in self.attacks_by(rep, "A", a.heads[0].label)
+                    if e["target"] in (b.hands[0].label, b.hands[1].label)]
+        self.assertFalse(hit_hand, "bypass 件不应被守护改向")
+
+    def test_break_优先拆守护者(self):
+        # break 腿:守护存在时改打对方 1 号位手(而非默认打腿)
+        a = mkp("A", legs=["猛腿"])
+        a.legs[0].ptag = "break"
+        b = mkp("B", hands=["新手手"], legs=["猛腿"])
+        rep = battle(a, b, seed=4, cfg=RuleConfig(**self.POS, block_prob=0.0))
+        first = self.attacks_by(rep, "A", a.legs[0].label)[0]
+        self.assertEqual(first["target"], b.hands[0].label)
+
+    def test_默认全关行为不变(self):
+        # 同 seed 同配装:默认 cfg 与显式关掉两开关,战报完全一致(保护旧口径与 parity)
+        a1, b1 = mkp("A", hands=["猛爪"] * 2), mkp("B", hands=["新手手"] * 3)
+        a2, b2 = mkp("A", hands=["猛爪"] * 2), mkp("B", hands=["新手手"] * 3)
+        r1 = battle(a1, b1, seed=11)
+        r2 = battle(a2, b2, seed=11, cfg=RuleConfig(positional=False, guard_front=False))
+        self.assertEqual(r1["events"], r2["events"])
+
+
 if __name__ == "__main__":
     unittest.main()

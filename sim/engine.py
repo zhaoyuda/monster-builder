@@ -57,6 +57,11 @@ class RuleConfig:
                                          #   False=旧口径,头/手/腿全池随机(A/B 用)
     status_slots: str = "multi"          # multi=异常状态可共存(现行) / single=每部件仅一个状态栏位,
                                          #   新状态顶掉旧状态(Akun Q19b 候选方案,A/B 用)
+    # —— 站位原型(2026-08-11,设计套路报告 E 条;实验开关,未经 Akun 拍板,demo 未接入)——
+    positional: bool = False             # 同类索敌 随机 → 「对位优先」:攻击者槽位号 n 优先打对方
+                                         #   同类槽位 n,死了按槽位号顺延(环形)。装配顺序自此有意义。
+    guard_front: bool = False            # 前位守护:指向头/躯干的单体攻击被对方 1 号位存活手拦下
+                                         #   (ptag="bypass" 的部件无视守护;AOE/额外目标不受影响)
 
 
 @dataclass
@@ -302,22 +307,55 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
             log(round_no, "status", side=def_key, part=victim.label, status="shock",
                 rounds=SHOCK_ROUNDS, by=attacker.label)
 
-    def choose_target(kind, defender, hunts=""):
+    def pick_from(pool, attacker=None):
+        """同类目标池选择。默认随机(现行);cfg.positional 开启且已知攻击者时改「对位优先」:
+        攻击者槽位号 n 优先打对方槽位 n(按槽位号排序后环形顺延到下一个存活者)——确定性,
+        装配顺序自此产生后果(站位原型)。"""
+        alive = [p for p in pool if p.alive()]
+        if not alive:
+            return None
+        if not (cfg.positional and attacker is not None):
+            return rng.choice(alive)
+        ordered = sorted(alive, key=lambda p: p.slot)
+        for p in ordered:
+            if p.slot >= attacker.slot:
+                return p
+        return ordered[0]   # 对方槽位号都比我小 → 环形回到最前
+
+    def front_guard(defender):
+        # 站位原型:1 号位(存活槽位号最小)的手是守护者
+        hands = [h for h in defender.hands if h.alive()]
+        return min(hands, key=lambda h: h.slot) if hands else None
+
+    def guard_redirect(target, defender, attacker):
+        """前位守护(cfg.guard_front):指向头/躯干的单体攻击被守护手拦下。
+        bypass 件无视;守护者不拦指向自己同类(手)的攻击——它本来就在目标池里。"""
+        if not cfg.guard_front or attacker is None or attacker.ptag == "bypass":
+            return target
+        if target.kind not in ("head", "torso"):
+            return target
+        return front_guard(defender) or target
+
+    def choose_target(kind, defender, hunts="", attacker=None):
+        # 站位原型 break 标签:守护存在时优先拆守护者(「破阵」)
+        if cfg.guard_front and attacker is not None and attacker.ptag == "break":
+            g = front_guard(defender)
+            if g is not None:
+                return g
         # 目标偏好(Q15 机制件原型):优先打指定部位,打光回退本类默认规则
         if hunts:
-            pool = [p for p in defender.parts_of(hunts) if p.alive()]
-            if pool:
-                return rng.choice(pool)
+            t = pick_from(defender.parts_of(hunts), attacker)
+            if t is not None:
+                return t
         if kind == "leg":
-            pool = [p for p in defender.legs if p.alive()]
-            return rng.choice(pool) if pool else defender.torso
+            return pick_from(defender.legs, attacker) or defender.torso
         if kind == "hand":
-            pool = [p for p in defender.hands if p.alive()]
-            return rng.choice(pool) if pool else defender.torso
+            return pick_from(defender.hands, attacker) or defender.torso
         # head:50% 打头(无存活头则回退躯干 E4),否则躯干
-        pool = [p for p in defender.heads if p.alive()]
-        if rng.random() < cfg.head_vs_head_prob and pool:
-            return rng.choice(pool)
+        if rng.random() < cfg.head_vs_head_prob:
+            t = pick_from(defender.heads, attacker)
+            if t is not None:
+                return t
         return defender.torso
 
     def strike(round_no, atk_key, attacker: Part, target: Part, extra=False, counter=False):
@@ -436,12 +474,15 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
         if attacker.revenge_pending:
             attacker.revenge_pending = False
             heads = [h for h in defender.heads if h.alive()]
-            target = rng.choice(heads) if heads else choose_target(attacker.kind, defender, attacker.hunts)
-        # 黏腿(Q22m):锁定中且目标存活 → 固定打它
+            target = rng.choice(heads) if heads else choose_target(attacker.kind, defender,
+                                                                   attacker.hunts, attacker)
+            target = guard_redirect(target, defender, attacker)   # 报复打头同样会被守护拦下
+        # 黏腿(Q22m):锁定中且目标存活 → 固定打它(锁定视为已越过守护,不再改向)
         elif attacker.sticky and attacker.lock_target is not None and attacker.lock_target.alive():
             target = attacker.lock_target
         else:
-            target = choose_target(attacker.kind, defender, attacker.hunts)
+            target = guard_redirect(choose_target(attacker.kind, defender, attacker.hunts, attacker),
+                                    defender, attacker)
         outcome = strike(round_no, atk_key, attacker, target)
         if attacker.sticky:
             attacker.lock_target = None if outcome == "dodge" else target
@@ -457,7 +498,8 @@ def battle(a: Monster, b: Monster, seed=0, cfg: RuleConfig = None, rng=None) -> 
     def combo_resolve(round_no, atk_key, part: Part):
         """连环腿(Q22l):同目标连打 3 段(各自判闪避/格挡),3 段全未被闪避且目标存活 → 补第 4 段。"""
         defender = sides[enemy_key(atk_key)]
-        target = choose_target(part.kind, defender, part.hunts)
+        target = guard_redirect(choose_target(part.kind, defender, part.hunts, part),
+                                defender, part)
         dodged, landed = False, 0
         for _ in range(3):
             if winner or not part.alive() or not target.alive():
